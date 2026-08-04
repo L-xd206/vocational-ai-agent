@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:job.mohrss.gov.cn)",
+      "WebFetch(domain:ncss.cn)",
+      "WebSearch",
+      "Bash(sed -i 's/去重精选200条/去重精选240条/' 数控操作工_完整数据展示平台.html)",
+      "Bash(sed -i 's/去重后约250条/去重精选240条/' 数控操作工_完整数据展示平台.html)",
+      "Bash(sed -i '397s/count:\"-\"}$/count:\"-\"\\\\},/' 数控操作工_完整数据展示平台.html)",
+      "Bash(sed -i '398d' 数控操作工_完整数据展示平台.html)",
+      "Bash(sed -i '438i];' 数控操作工_完整数据展示平台.html)",
+      "Bash(sed -i '$d' 数控操作工_完整数据展示平台.html)",
+      "WebFetch(domain:tieba.baidu.com)",
+      "WebFetch(domain:zhuanlan.zhihu.com)",
+      "WebFetch(domain:www.cmiw.cn)",
+      "WebFetch(domain:www.bilibili.com)",
+      "WebFetch(domain:www.gofarlic.com)",
+      "WebFetch(domain:blog.csdn.net)",
+      "WebFetch(domain:bbs.plcjs.com)",
+      "WebFetch(domain:www.ksrapidcnc.com)",
+      "WebFetch(domain:mp.weixin.qq.com)"
+    ]
+  }
+}

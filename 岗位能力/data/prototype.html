@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教育实训 - 系统管理</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --blue-primary: #3B82F6;
+      --blue-dark: #2563EB;
+      --blue-deeper: #1E40AF;
+      --blue-hover: #2563EB;
+      --blue-light: #EFF6FF;
+      --blue-subtle: #BFDBFE;
+      --blue-accent: #3B82F6;
+      --text-primary: #1A202C;
+      --text-secondary: #4A5568;
+      --text-hint: #A0AEC0;
+      --text-muted: #CBD5E0;
+      --border: #E2E8F0;
+      --border-light: #EDF2F7;
+      --white: #FFFFFF;
+      --bg-page: #F7FAFC;
+      --bg-sidebar: #FAFCFE;
+      --danger: #E53E3E;
+      --success: #38A169;
+      --warning: #D69E2E;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
+      --radius: 8px;
+    }
+
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== 布局 ===== */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== 主内容区 ===== */
+    .main-content {
+      flex: 1;
+      margin-left: 220px;
+      padding: 24px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .content-iframe {
+      width: 100%;
+      height: calc(100vh - 104px);
+      border: none;
+      border-radius: 10px;
+      background: white;
+    }
+
+    /* 面包屑 */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-hint);
+      margin-bottom: 20px;
+    }
+
+    .breadcrumb a {
+      color: var(--text-hint);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .breadcrumb a:hover {
+      color: var(--blue-primary);
+    }
+
+    .breadcrumb .current {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .breadcrumb svg {
+      width: 14px;
+      height: 14px;
+      stroke: var(--text-muted);
+    }
+
+    /* 页面标题区 */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .page-desc {
+      font-size: 13px;
+      color: var(--text-hint);
+      margin-top: 4px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    .btn-primary {
+      background: var(--blue-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--blue-hover);
+      box-shadow: 0 2px 8px rgba(43, 108, 176, 0.3);
+    }
+
+    .btn-outline {
+      background: white;
+      color: var(--text-secondary);
+      border: 1.5px solid var(--border);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--blue-primary);
+      color: var(--blue-primary);
+    }
+
+    /* 搜索/筛选栏 */
+    .filter-bar {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+      max-width: 320px;
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      stroke: var(--text-hint);
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px 0 38px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-family: 'Noto Sans SC', sans-serif;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--border-focus, var(--blue-subtle));
+      box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.06);
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-hint);
+    }
+
+    .filter-select {
+      height: 36px;
+      padding: 0 32px 0 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-family: 'Noto Sans SC', sans-serif;
+      color: var(--text-secondary);
+      background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='%23A0AEC0'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+      appearance: none;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .filter-select:focus {
+      border-color: var(--blue-subtle);
+    }
+
+    /* 表格 */
+    .table-card {
+      background: white;
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+      overflow: hidden;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--bg-page);
+    }
+
+    .data-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-hint);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .data-table td {
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr {
+      transition: background 0.1s;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--blue-light);
+    }
+
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-cell-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .user-cell-name {
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .user-cell-id {
+      font-size: 11px;
+      color: var(--text-hint);
+    }
+
+    .status-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-tag.active {
+      background: #F0FFF4;
+      color: #276749;
+    }
+
+    .status-tag.active::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .status-tag.inactive {
+      background: #FFF5F5;
+      color: #9B2C2C;
+    }
+
+    .status-tag.inactive::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .action-btn {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: transparent;
+    }
+
+    .action-btn.edit {
+      color: var(--blue-primary);
+    }
+
+    .action-btn.edit:hover {
+      background: var(--blue-light);
+    }
+
+    .action-btn.delete {
+      color: var(--danger);
+    }
+
+    .action-btn.delete:hover {
+      background: #FFF5F5;
+    }
+
+    /* 分页 */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .pagination-info {
+      font-size: 13px;
+      color: var(--text-hint);
+    }
+
+    .pagination-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .page-btn {
+      min-width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .page-btn:hover {
+      border-color: var(--blue-primary);
+      color: var(--blue-primary);
+    }
+
+    .page-btn.active {
+      background: var(--blue-primary);
+      border-color: var(--blue-primary);
+      color: white;
+    }
+
+    /* ===== Toast ===== */
+    .toast {
+      position: fixed;
+      top: 72px;
+      right: 24px;
+      background: white;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text-primary);
+      z-index: 200;
+      box-shadow: var(--shadow-lg);
+      border-left: 3px solid var(--success);
+      transform: translateX(120%);
+      opacity: 0;
+      transition: all 0.35s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 主体布局 -->
+  <div class="layout">
+    <!-- 侧边栏组件 -->
+    <sidebar-menu id="sidebar" title="导航菜单" default-open="能力图谱" active="能力图谱库"></sidebar-menu>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <iframe class="content-iframe" src="about:blank" id="contentFrame" name="contentFrame"></iframe>
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- 引入侧边栏组件 -->
+  <script src="components/sidebar-menu.js"></script>
+
+  <script>
+    // 配置菜单数据：两组菜单（能力图谱组 + 系统管理组）
+    document.getElementById('sidebar').setMenuData([
+      {
+        group: '能力图谱',
+        items: [
+          {
+            label: '能力图谱',
+            icon: 'network',
+            open: true,
+            children: [
+              { label: '能力图谱库', href: '能力图谱库.html', active: true }
+            ]
+          }
+        ]
+      },
+      {
+        group: '系统管理',
+        items: [
+          {
+            label: '系统管理',
+            icon: 'cog',
+            children: [
+              { label: '用户管理', href: '用户管理.html' },
+              { label: '角色管理', href: '角色管理.html' }
+            ]
+          }
+        ]
+      }
+    ]);
+
+    // 监听菜单选择，切换 iframe 页面
+    document.getElementById('sidebar').addEventListener('menu-select', function(e) {
+      const href = e.detail.href;
+      if (href && href !== '#' && href !== 'javascript:void(0)') {
+        const frame = document.getElementById('contentFrame');
+        let currentFile = frame.getAttribute('src');
+        try {
+          currentFile = decodeURIComponent(frame.contentWindow?.location?.pathname?.split('/').pop() || currentFile);
+        } catch (err) {
+          currentFile = frame.getAttribute('src');
+        }
+        if (currentFile !== href) {
+          frame.src = href;
+        }
+      }
+    });
+
+    // 底部头像菜单：个人中心
+    document.getElementById('sidebar').addEventListener('profile', function() {
+      const frame = document.getElementById('contentFrame');
+      if (frame.getAttribute('src') !== '个人中心.html') {
+        frame.src = '个人中心.html';
+      }
+      document.querySelectorAll('sidebar-menu .sub-menu-item').forEach(el => el.classList.remove('active'));
+    });
+
+    // 默认加载能力图谱库页面
+    document.getElementById('contentFrame').src = '能力图谱库.html';
+
+    // Toast 提示
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

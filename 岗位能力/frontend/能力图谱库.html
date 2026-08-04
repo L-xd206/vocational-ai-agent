@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>能力图谱库</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --purple: #6867f2; --purple-soft: #f0f0ff;
+      --cyan: #12b7ee; --cyan-soft: #eaf9ff;
+      --orange: #f4a51c; --orange-soft: #fff7e6;
+      --green: #23c18a; --green-soft: #e9fbf4;
+      --rose: #ec5a8d; --rose-soft: #fde8f1;
+      --ink: #172033; --muted: #7e8da8; --line: #dbe6f3; --panel: #f3f7fc;
+      --white: #fff; --shadow: 0 10px 28px rgba(29, 45, 74, .08);
+    }
+    body { min-height: 100vh; background: #fff; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    .page { padding: 18px 22px 28px; }
+    .view-hidden { display: none; }
+
+    /* 统计卡片 */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .stat-card { position: relative; min-height: 112px; overflow: hidden; padding: 18px 18px 14px; border: 1px solid #e3ebf5; border-radius: 14px; background: #fff; box-shadow: 0 6px 18px rgba(27,44,72,.06); }
+    .stat-card::after { content:''; position:absolute; right:0; bottom:0; width:92px; height:34px; opacity:.65; background:var(--spark); clip-path:polygon(0 100%,22% 76%,43% 64%,66% 38%,100% 24%,100% 100%); }
+    .stat-icon { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; margin-bottom:12px; color:var(--tone); background:var(--tone-soft); font-size:16px; font-weight:800; }
+    .stat-label { font-size:12px; color:#8a98af; margin-bottom:4px; font-weight:600; }
+    .stat-value { display:flex; align-items:flex-end; gap:4px; font-size:30px; line-height:1; font-weight:800; color:#111827; margin-bottom:8px; letter-spacing:-.8px; }
+    .stat-value span { font-size:14px; color:#61708a; font-weight:700; margin-bottom:3px; }
+    .stat-trend { font-size:12px; color:#16b981; font-weight:700; }
+
+    /* 页头 */
+    .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    .title-line { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .title-icon { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; color:#4f46e5; background:linear-gradient(135deg,#eef2ff,#f8fbff); border:1px solid #dfe6ff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.75); }
+    .title-icon svg { width:22px; height:22px; stroke:currentColor; }
+    h1 { font-size:21px; line-height:1.2; font-weight:700; letter-spacing:.2px; }
+    .crumb { font-size:13px; color:#91a0b8; white-space:nowrap; }
+    .crumb strong { color:#63718b; font-weight:500; }
+    .head-actions { display:flex; align-items:center; gap:10px; padding-top:4px; flex-shrink:0; }
+    .btn { height:34px; padding:0 14px; border:1px solid #dfe7f2; border-radius:12px; background:var(--white); color:#43516a; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 4px 12px rgba(33,51,84,.04); display:inline-flex; align-items:center; gap:6px; }
+    .btn:hover { border-color:#b8c8df; transform:translateY(-1px); }
+    .btn-primary { border-color:#1aa4ec; background:linear-gradient(135deg,#18b7ff,#078be8); color:#fff; box-shadow:0 8px 20px rgba(8,139,232,.22); }
+    .btn-primary:hover { transform:translateY(-1px); box-shadow:0 12px 26px rgba(8,139,232,.3); }
+    .btn-success { border-color:#1aa46c; background:linear-gradient(135deg,#18d78b,#078e5a); color:#fff; box-shadow:0 8px 20px rgba(8,142,90,.22); }
+
+    /* 图谱面板 */
+    .map-board { position:relative; min-height:500px; overflow-x:auto; padding:18px; border:1px solid #e4ebf5; border-radius:14px; background: linear-gradient(90deg,transparent 33.33%,rgba(196,210,228,.42) 33.33%,rgba(196,210,228,.42) calc(33.33% + 1px),transparent calc(33.33% + 1px)), linear-gradient(90deg,transparent 66.66%,rgba(196,210,228,.42) 66.66%,rgba(196,210,228,.42) calc(66.66% + 1px),transparent calc(66.66% + 1px)),#f3f7fc; box-shadow:var(--shadow); }
+    .mindmap { position:relative; min-width:1080px; }
+    .col-headers, .level-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:64px; }
+    .col-headers { position:relative; z-index:3; margin-bottom:14px; }
+    .col-header { display:grid; grid-template-columns:auto minmax(118px,1fr); align-items:center; gap:10px; padding:0 14px; font-size:13px; font-weight:800; color:#5f6f89; letter-spacing:.4px; }
+    .col-search { width:100%; height:28px; padding:0 10px; border:1px solid #dfe7f2; border-radius:9px; background:rgba(255,255,255,.82); color:#25324a; font-size:12px; font-family:inherit; font-weight:500; outline:none; transition:.16s ease; }
+    .col-search:focus { border-color:#9bc8ff; background:#fff; box-shadow:0 0 0 3px rgba(24,183,255,.08); }
+    .level-grid { position:relative; z-index:2; align-items:stretch; }
+    .level-column { display:flex; flex-direction:column; gap:18px; min-height:250px; }
+    .chain-column { justify-content:center; }
+    .group-block { display:flex; align-items:center; min-height:76px; }
+    .ability-block { display:flex; flex-direction:column; gap:14px; min-height:76px; }
+
+    /* 节点卡片 */
+    .node-card { position:relative; width:100%; min-height:58px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e8eef7; border-left:4px solid var(--tone); border-radius:12px; background:linear-gradient(90deg,var(--tone-soft),#fff 48%); box-shadow:0 8px 22px rgba(40,58,88,.06); white-space:nowrap; cursor:default; transition:box-shadow .2s ease,transform .2s ease; }
+    .node-card:hover { box-shadow:0 12px 28px rgba(40,58,88,.1); transform:translateY(-1px); }
+    .node-card.is-hidden, .group-block.is-hidden, .ability-block.is-hidden,
+.node-card.search-hidden, .group-block.search-hidden, .ability-block.search-hidden { display:none; }
+    .node-card.collapsed { opacity:.86; }
+    .toggle-btn { width:22px; height:22px; display:grid; place-items:center; border:1px solid #e1e8f2; border-radius:7px; background:#fff; color:#8b99ae; font-size:13px; line-height:1; cursor:pointer; flex-shrink:0; transition:.2s ease; }
+    .node-card.expanded .toggle-btn { transform:rotate(90deg); color:var(--tone); border-color:rgba(18,183,238,.25); }
+    .node-dot { width:7px; height:7px; border-radius:50%; background:var(--tone); flex-shrink:0; }
+    .node-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
+    .node-title { overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:800; color:#27364e; }
+    .node-meta { font-size:12px; color:#8d9bb0; font-weight:600; }
+    .mini-btn, .view-btn { height:28px; padding:0 10px; border-radius:8px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; flex-shrink:0; transition:.18s ease; }
+    .mini-btn { border:1px solid #dfe7f2; background:#fbfdff; color:#5a6a85; }
+    .mini-btn:hover { border-color:var(--tone); color:var(--tone); }
+    .view-btn { border:none; background:linear-gradient(135deg,#18b7ff,#078be8); color:#fff; box-shadow:0 6px 16px rgba(8,139,232,.18); }
+    .view-btn:hover { transform:translateY(-1px); }
+    .node-actions { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+    .node-icon-btn { width:26px; height:26px; display:grid; place-items:center; border:1px solid #e1e8f2; border-radius:7px; background:#fff; color:#8b99ae; cursor:pointer; transition:.18s ease; padding:0; }
+    .node-icon-btn:hover { border-color:var(--tone); color:var(--tone); }
+    .node-icon-btn.danger:hover { border-color:#ef4444; color:#ef4444; background:#fef2f2; }
+    .node-icon-btn svg { width:14px; height:14px; }
+    .node-edit-input { width:100%; border:1px solid var(--tone,#12b7ee); border-radius:6px; padding:2px 6px; font-size:14px; font-weight:700; font-family:inherit; color:#27364e; outline:none; background:#fff; }
+    .l2-back-bar { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+    .connection-layer { position:absolute; inset:32px 0 0; width:100%; height:calc(100% - 32px); z-index:1; overflow:visible; pointer-events:none; }
+    .connection-layer path { fill:none; stroke-width:2.5; stroke-linecap:round; filter:drop-shadow(0 2px 2px rgba(29,45,74,.04)); }
+    .empty-hint { display:flex; align-items:center; justify-content:center; min-height:180px; color:#b0bed0; font-size:14px; font-weight:600; }
+
+    /* 弹窗 */
+    .modal-mask { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
+    .modal-mask.show { display:flex; }
+    .modal { width:560px; max-width:92vw; max-height:82vh; overflow:hidden; border:1px solid rgba(226,234,246,.95); border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; display:flex; flex-direction:column; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(14px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+    .modal-head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,#f7fbff,#eef6ff); border-bottom:1px solid #e7eef8; }
+    .modal-title-wrap { display:flex; align-items:center; gap:12px; flex:1; }
+    .modal-icon { width:36px; height:36px; display:grid; place-items:center; border-radius:12px; background:var(--modal-soft,#eaf9ff); color:var(--modal-tone,#12b7ee); font-size:18px; font-weight:800; flex-shrink:0; }
+    .modal-title { font-size:17px; font-weight:800; color:#1f2d44; }
+    .modal-subtitle { margin-top:3px; font-size:12px; color:#8a98af; font-weight:600; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:8px; background:transparent; color:#8b99ae; font-size:20px; cursor:pointer; display:grid; place-items:center; transition:.15s; }
+    .modal-close:hover { background:#f1f5f9; color:#475569; }
+    .modal-body { padding:20px; overflow-y:auto; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .modal-body > .add-row, .modal-body > .modal-top-input { grid-column:1 / -1; }
+    .modal-card { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 10px; border:1px solid #e4ebf5; border-left:4px solid var(--modal-tone); border-radius:10px; background:#fff; }
+    .modal-card-name { flex:1; min-width:0; border:none; outline:none; font-family:inherit; font-size:13px; font-weight:700; color:#27364e; background:transparent; }
+    .card-delete { width:28px; height:28px; display:grid; place-items:center; border:none; border-radius:7px; background:transparent; color:#ef4444; cursor:pointer; flex-shrink:0; transition:.15s ease; }
+    .card-delete:hover { background:#fef2f2; color:#dc2626; }
+    .card-delete svg { width:15px; height:15px; }
+    .add-row { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; padding-top:2px; }
+    .add-row input { width:100%; height:40px; padding:0 12px; border:1px solid #dfe7f2; border-radius:10px; background:#fbfdff; color:#25324a; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .add-row input:focus { border-color:var(--modal-tone,#12b7ee); box-shadow:0 0 0 3px rgba(18,183,238,.08); background:#fff; }
+    .modal-top-input { display:flex; flex-direction:column; gap:7px; margin-bottom:16px; }
+    .modal-top-input label { font-size:12px; font-weight:700; color:#64748b; }
+    .input-with-ai { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
+    .input-with-ai input { width:100%; height:40px; padding:0 12px; border:1px solid #dfe7f2; border-radius:10px; background:#fbfdff; color:#25324a; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .input-with-ai input:focus { border-color:var(--modal-tone,#12b7ee); box-shadow:0 0 0 3px rgba(18,183,238,.08); background:#fff; }
+    .ai-btn { height:40px; min-width:92px; display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid #a7f3d0; border-radius:10px; background:linear-gradient(135deg,#ecfdf5,#d1fae5); color:#059669; font-size:13px; font-weight:800; font-family:inherit; cursor:pointer; transition:.18s ease; }
+    .ai-btn:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(5,150,105,.14); }
+    .ai-btn.loading { pointer-events:none; color:#047857; background:#ecfdf5; }
+    .ai-spinner { display:none; width:14px; height:14px; border:2px solid rgba(5,150,105,.24); border-top-color:#059669; border-radius:50%; animation:spin .72s linear infinite; }
+    .ai-btn.loading .ai-spinner { display:inline-block; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .modal-foot { display:flex; align-items:center; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #eef3f8; }
+    .btn-save { border-color:#1aa4ec; background:linear-gradient(135deg,#18b7ff,#078be8); color:#fff; box-shadow:0 8px 20px rgba(8,139,232,.22); font-weight:700; padding:0 22px; }
+    .btn-save:hover { transform:translateY(-1px); box-shadow:0 12px 26px rgba(8,139,232,.3); }
+
+    /* Toast */
+    .toast { position:fixed; top:72px; right:24px; background:white; padding:14px 20px; border-radius:10px; font-size:13px; color:var(--ink); z-index:300; box-shadow:0 12px 32px rgba(16,30,54,.18); border-left:3px solid var(--green); transform:translateX(120%); opacity:0; transition:all .35s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateX(0); }
+
+    @media (max-width:900px) { .page{padding:14px} .page-head{flex-direction:column} .head-actions{width:100%;justify-content:flex-end} .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))} .col-headers,.level-grid{grid-template-columns:repeat(3,260px);gap:44px} }
+  </style>
+</head>
+<body>
+<main class="page">
+  <!-- Level 1 -->
+  <div id="level1View">
+    <section class="stats-grid" id="statsGrid" aria-label="能力体系统计"></section>
+
+    <section class="page-head">
+      <div>
+        <div class="title-line">
+          <div class="title-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75 12 2.25l8.25 4.5L12 11.25l-8.25-4.5Z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12 12 16.5 20.25 12M3.75 17.25 12 21.75l8.25-4.5"/>
+            </svg>
+          </div>
+          <h1>能力体系层级管理</h1>
+        </div>
+        <div class="crumb" id="crumbText">产业链 → 职业岗位 → 岗位能力 · <strong>加载中...</strong></div>
+      </div>
+      <div class="head-actions">
+        <button class="btn" onclick="toggleAllNodes()" id="toggleAllBtn">全部收缩</button>
+        <button class="btn btn-primary" onclick="openChainModal()">新增产业链</button>
+      </div>
+    </section>
+
+    <section class="map-board" aria-label="横向能力体系层级图">
+      <div class="mindmap" id="mindmap">
+        <svg class="connection-layer" id="connectionLayer"></svg>
+        <div class="col-headers">
+          <div class="col-header"><span>产业链</span><input class="col-search" placeholder="搜索产业链" oninput="filterColumn('chain',this.value)"></div>
+          <div class="col-header"><span>职业岗位</span><input class="col-search" placeholder="搜索职业岗位" oninput="filterColumn('group',this.value)"></div>
+          <div class="col-header"><span>岗位能力</span><input class="col-search" placeholder="搜索岗位能力" oninput="filterColumn('ability',this.value)"></div>
+        </div>
+        <div class="level-grid" id="levelGrid">
+          <div class="level-column chain-column" id="chainColumn"><div class="empty-hint">暂无产业链</div></div>
+          <div class="level-column group-column" id="groupColumn"><div class="empty-hint">请先新增产业链</div></div>
+          <div class="level-column ability-column" id="abilityColumn"><div class="empty-hint">请先生成能力图谱</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Level 2 -->
+  <div id="level2View" class="view-hidden">
+    <div class="l2-back-bar"><button class="btn" onclick="backToLevel1()">← 返回能力图谱库</button></div>
+    <section class="page-head">
+      <div>
+        <div class="title-line">
+          <div class="title-icon" style="color:#f4a51c;background:linear-gradient(135deg,#fff7e6,#fffdfa);border-color:#ffe2b8;">
+            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75 12 2.25l8.25 4.5L12 11.25l-8.25-4.5Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12 12 16.5 20.25 12M3.75 17.25 12 21.75l8.25-4.5"/></svg>
+          </div>
+          <h1 id="l2Title">岗位能力详情</h1>
+        </div>
+      </div>
+      <div class="head-actions"><button class="btn" onclick="toggleAllNodes2()" id="toggleAllBtn2">全部收缩</button></div>
+    </section>
+    <section class="map-board" aria-label="岗位能力下钻层级图">
+      <div class="mindmap" id="mindmap2">
+        <svg class="connection-layer" id="connectionLayer2"></svg>
+        <div class="col-headers">
+          <div class="col-header"><span>岗位能力</span><input class="col-search" placeholder="搜索岗位能力" oninput="filterColumn2('ability',this.value)"></div>
+          <div class="col-header"><span>能力单元</span><input class="col-search" placeholder="搜索能力单元" oninput="filterColumn2('unit',this.value)"></div>
+          <div class="col-header"><span>知识点/技能点</span><input class="col-search" placeholder="搜索知识点/技能点" oninput="filterColumn2('point',this.value)"></div>
+        </div>
+        <div class="level-grid" id="levelGrid2">
+          <div class="level-column chain-column" id="l2AbilityColumn"></div>
+          <div class="level-column group-column" id="l2UnitColumn"></div>
+          <div class="level-column ability-column" id="l2PointColumn"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- 弹窗 -->
+<div class="modal-mask" id="modalMask" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="modal-icon" id="modalIcon">＋</div>
+        <div><div class="modal-title" id="modalTitle">新增</div><div class="modal-subtitle" id="modalSubtitle"></div></div>
+      </div>
+      <button class="modal-close" onclick="hideModal()">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot">
+      <button class="btn" onclick="hideModal()">取消</button>
+      <button class="btn btn-save" onclick="saveModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── 图标 ───
+const TRASH = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>`;
+const PENCIL = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z"/></svg>`;
+const STROKE = { chain:'#6867f2', group:'#12b7ee', ability:'#f4a51c', unit:'#ec5a8d', point:'#23c18a' };
+
+const API = '/api';
+let currentModalType = '', currentChainId = '', currentGroupId = '';
+let currentSimpleList = [];
+
+// ─── 数据状态 ───
+let chains = [],  jobs = [], abilities = [], crawlStatus = {};
+// abilities: [{id, job_name, chain_name, chain_id, job_id, total_abilities, total_skills, data}]
+// crawlStatus: {job_id: 'completed'|'not_started'|'running'}
+
+// ─── Toast ───
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+async function apiSafe(url, opts = {}) {
+  try {
+    const r = await fetch(url, opts);
+    return r.json();
+  } catch(e) {
+    return { error: '网络请求失败: ' + e.message };
+  }
+}
+
+// ─── 加载全部数据 ───
+async function loadAllData() {
+  // 加载产业链
+  const chainRes = await api(API + '/chain/list');
+  chains = chainRes.chains || [];
+
+  // 加载每个产业链的岗位
+  jobs = [];
+  for (const c of chains) {
+    try {
+      const d = await api(API + '/chain/' + c.id + '/detail');
+      if (d.jobs) jobs.push(...d.jobs.map(j => ({...j, chain_id: c.id, chain_name: c.name})));
+    } catch(e) {}
+  }
+
+  // 加载能力图谱 + 爬取状态
+  abilities = [];
+  crawlStatus = {};
+  for (const j of jobs) {
+    try {
+      const t = await api(API + '/ability/' + j.id + '/tree');
+      crawlStatus[j.id] = t.crawl_status || 'not_started';
+      if (t.status === 'ready') {
+        abilities.push({ id: j.id, job_name: j.name, chain_name: j.chain_name, chain_id: j.chain_id, job_id: j.id, total_abilities: t.total_abilities, total_skills: t.total_skills, data: t.abilities });
+      }
+    } catch(e) { crawlStatus[j.id] = 'not_started'; }
+  }
+
+  renderStats();
+  renderLevel1();
+}
+
+// ─── 统计卡片 ───
+function renderStats() {
+  const totalAbilities = abilities.length;
+  const totalSkills = abilities.reduce((s, a) => s + a.total_skills, 0);
+  let totalUnits = 0;
+  abilities.forEach(a => { if (a.data) a.data.forEach(ab => { totalUnits += (ab.children || []).length; }); });
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card" style="--tone:var(--purple);--tone-soft:var(--purple-soft);--spark:linear-gradient(135deg,transparent 20%,#c7c7ff 100%);">
+      <div class="stat-icon">⌘</div><div class="stat-label">产业链数量</div>
+      <div class="stat-value">${chains.length}<span>条</span></div><div class="stat-trend">实时数据</div>
+    </div>
+    <div class="stat-card" style="--tone:var(--cyan);--tone-soft:var(--cyan-soft);--spark:linear-gradient(135deg,transparent 20%,#9ae7ff 100%);">
+      <div class="stat-icon">▣</div><div class="stat-label">岗位数量</div>
+      <div class="stat-value">${jobs.length}<span>个</span></div><div class="stat-trend">实时数据</div>
+    </div>
+    <div class="stat-card" style="--tone:var(--orange);--tone-soft:var(--orange-soft);--spark:linear-gradient(135deg,transparent 20%,#ffd58a 100%);">
+      <div class="stat-icon">◎</div><div class="stat-label">岗位能力数量</div>
+      <div class="stat-value">${totalAbilities}<span>个</span></div><div class="stat-trend">已生成图谱</div>
+    </div>
+    <div class="stat-card" style="--tone:var(--rose);--tone-soft:var(--rose-soft);--spark:linear-gradient(135deg,transparent 20%,#f9c2da 100%);">
+      <div class="stat-icon">◈</div><div class="stat-label">能力单元数量</div>
+      <div class="stat-value">${totalUnits}<span>个</span></div><div class="stat-trend">技能维度统计</div>
+    </div>
+    <div class="stat-card" style="--tone:var(--green);--tone-soft:var(--green-soft);--spark:linear-gradient(135deg,transparent 20%,#9debd0 100%);">
+      <div class="stat-icon">✓</div><div class="stat-label">知识点/技能点数量</div>
+      <div class="stat-value">${totalSkills}<span>个</span></div><div class="stat-trend">技能点总数</div>
+    </div>`;
+
+  document.getElementById('crumbText').innerHTML = `产业链 → 职业岗位 → 岗位能力 · <strong>${chains.length}条产业链 / ${jobs.length}个岗位 / ${totalAbilities}个已生成图谱</strong>`;
+}
+
+// ─── Level 1 渲染 ───
+function renderLevel1() {
+  const chainCol = document.getElementById('chainColumn');
+  const groupCol = document.getElementById('groupColumn');
+  const abilityCol = document.getElementById('abilityColumn');
+
+  if (!chains.length) {
+    chainCol.innerHTML = '<div class="empty-hint">暂无产业链</div>';
+    groupCol.innerHTML = '<div class="empty-hint">请先新增产业链</div>';
+    abilityCol.innerHTML = '<div class="empty-hint">请先生成能力图谱</div>';
+    return;
+  }
+
+  let chainHtml = '', groupHtml = '', abilityHtml = '';
+
+  chains.forEach(c => {
+    const chainJobs = jobs.filter(j => j.chain_id === c.id);
+    const hasAb = abilities.some(a => a.chain_id === c.id);
+    chainHtml += `<div class="node-card expanded" data-node="chain-${c.id}" data-type="chain" style="--tone:var(--purple);--tone-soft:var(--purple-soft);">
+      <button class="toggle-btn" onclick="toggleNode('chain-${c.id}')">›</button>
+      <span class="node-dot"></span>
+      <div class="node-main"><span class="node-title">${esc(c.name)}</span><span class="node-meta">${chainJobs.length}个岗位${hasAb ? ' · 已生成图谱' : ''}</span></div>
+      <button class="mini-btn" onclick="openJobModal(${c.id},'${escAttr(c.name)}')">新增岗位</button>
+      <div class="node-actions">
+        <button class="node-icon-btn danger" onclick="deleteChain(${c.id})" title="删除">${TRASH}</button>
+      </div>
+    </div>`;
+
+    chainJobs.forEach(j => {
+      const jobAbilities = abilities.filter(a => a.job_id === j.id);
+      const abData = jobAbilities.length > 0 ? jobAbilities[0].data : [];
+      const nodeId = 'group-' + j.id;
+      const cs = crawlStatus[j.id] || 'not_started';
+
+      // 三步流程按钮：爬取 → 生成图谱 → 查看
+      let actionBtn = '';
+      if (abData.length > 0) {
+        actionBtn = `<button class="view-btn" onclick="drillToLevel2(${j.id},'${escAttr(j.name)}')">查看图谱</button>`;
+      } else if (cs === 'completed') {
+        actionBtn = `<button class="mini-btn" onclick="genAbilityForJob(${j.id},this)" style="color:#f4a51c;border-color:#f4a51c;">② 生成图谱</button>`;
+      } else {
+        actionBtn = `<button class="mini-btn" onclick="startCrawlForJob(${j.id},this)">① 爬取数据</button>`;
+      }
+
+      // 状态描述
+      let statusMeta = '';
+      if (abData.length > 0) statusMeta = `${abData.length}个岗位能力`;
+      else if (cs === 'completed') statusMeta = '已爬取 · 待生成图谱';
+      else statusMeta = '待爬取招聘数据';
+
+      groupHtml += `<div class="group-block" data-block="${nodeId}">
+        <div class="node-card expanded" data-node="${nodeId}" data-parent="chain-${c.id}" data-type="group" style="--tone:var(--cyan);--tone-soft:var(--cyan-soft);">
+          <button class="toggle-btn" onclick="toggleNode('${nodeId}')">›</button>
+          <span class="node-dot"></span>
+          <div class="node-main"><span class="node-title">${esc(j.name)}</span><span class="node-meta">${statusMeta}</span></div>
+          ${actionBtn}
+          <div class="node-actions">
+            <button class="node-icon-btn danger" onclick="deleteJob(${j.id})" title="删除">${TRASH}</button>
+          </div>
+        </div>
+      </div>`;
+
+      if (abData.length > 0) {
+        abilityHtml += `<div class="ability-block" data-ability-block="${nodeId}">`;
+        abData.forEach(ab => {
+          abilityHtml += `<div class="node-card expanded" data-node="ability-${j.id}-${escAttr(ab.name)}" data-parent="${nodeId}" data-type="ability" style="--tone:var(--orange);--tone-soft:var(--orange-soft);">
+            <span class="node-dot"></span>
+            <div class="node-main"><span class="node-title">${esc(ab.name)}</span><span class="node-meta">${(ab.children||[]).length}个知识点/技能点</span></div>
+            <button class="view-btn" onclick="drillToLevel2(${j.id},'${escAttr(j.name)}','${escAttr(ab.name)}')">查看</button>
+          </div>`;
+        });
+        abilityHtml += '</div>';
+      }
+    });
+  });
+
+  chainCol.innerHTML = chainHtml;
+  groupCol.innerHTML = groupHtml || '<div class="empty-hint">暂无岗位</div>';
+  abilityCol.innerHTML = abilityHtml || '<div class="empty-hint">暂未生成能力图谱</div>';
+
+  requestAnimationFrame(drawConnections);
+}
+
+// ─── SVG 连线 ───
+function visibleNode(node) { return node && !node.classList.contains('is-hidden') && node.offsetParent !== null; }
+
+function syncBlockHeights(scope) {
+  (scope || document).querySelectorAll('[data-block]').forEach(block => {
+    const key = block.dataset.block;
+    const abBlock = (scope || document).querySelector(`[data-ability-block="${key}"]`);
+    if (!abBlock || abBlock.classList.contains('is-hidden')) return;
+    block.style.minHeight = abBlock.offsetHeight + 'px';
+  });
+}
+
+function drawConnectionsIn(scope) {
+  if (!scope) return;
+  const layer = scope.querySelector('.connection-layer');
+  if (!layer) return;
+  syncBlockHeights(scope);
+  layer.innerHTML = '';
+  const mapRect = scope.getBoundingClientRect();
+  if (mapRect.width === 0) return;
+  const nodes = [...scope.querySelectorAll('[data-node]')];
+
+  nodes.forEach(child => {
+    const parentId = child.dataset.parent;
+    if (!parentId || !visibleNode(child)) return;
+    const parent = scope.querySelector(`[data-node="${parentId}"]`);
+    if (!parent || !visibleNode(parent)) return;
+
+    const from = parent.getBoundingClientRect();
+    const to = child.getBoundingClientRect();
+    const x1 = from.right - mapRect.left;
+    const y1 = from.top + from.height/2 - mapRect.top - 32;
+    const x2 = to.left - mapRect.left;
+    const y2 = to.top + to.height/2 - mapRect.top - 32;
+    const mid = Math.max(34, (x2 - x1)/2);
+    const d = `M ${x1} ${y1} C ${x1+mid} ${y1}, ${x2-mid} ${y2}, ${x2} ${y2}`;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', STROKE[child.dataset.type] || '#12b7ee');
+    layer.appendChild(path);
+  });
+}
+
+function drawConnections() {
+  drawConnectionsIn(document.getElementById('mindmap'));
+  const l2 = document.getElementById('mindmap2');
+  const l2View = document.getElementById('level2View');
+  if (l2 && l2View && !l2View.classList.contains('view-hidden')) drawConnectionsIn(l2);
+}
+
+// ─── 展开/收缩 ───
+function setDescendantsVisible(parentId, visible) {
+  document.querySelectorAll(`[data-parent="${parentId}"]`).forEach(child => {
+    child.classList.toggle('is-hidden', !visible);
+    const nodeId = child.dataset.node;
+    const block = document.querySelector(`[data-block="${nodeId}"]`);
+    const abBlock = document.querySelector(`[data-ability-block="${nodeId}"]`);
+    if (block) block.classList.toggle('is-hidden', !visible);
+    if (abBlock) abBlock.classList.toggle('is-hidden', !visible);
+    if (!visible) setDescendantsVisible(nodeId, false);
+    else if (child.classList.contains('expanded')) setDescendantsVisible(nodeId, true);
+  });
+}
+
+function toggleNode(nodeId) {
+  const node = document.querySelector(`[data-node="${nodeId}"]`);
+  if (!node) return;
+  const willExpand = !node.classList.contains('expanded');
+  node.classList.toggle('expanded', willExpand);
+  node.classList.toggle('collapsed', !willExpand);
+  setDescendantsVisible(nodeId, willExpand);
+  requestAnimationFrame(drawConnections);
+}
+
+function toggleAllNodes() {
+  const nodes = [...document.querySelectorAll('#mindmap [data-node]')];
+  const allExpanded = nodes.every(n => n.classList.contains('expanded'));
+  const btn = document.getElementById('toggleAllBtn');
+  if (allExpanded) {
+    nodes.forEach(n => { n.classList.remove('expanded'); n.classList.add('collapsed'); });
+    document.querySelectorAll('#mindmap [data-parent]').forEach(c => c.classList.add('is-hidden'));
+    document.querySelectorAll('#mindmap [data-block], #mindmap [data-ability-block]').forEach(b => b.classList.add('is-hidden'));
+    btn.textContent = '全部展开';
+  } else {
+    nodes.forEach(n => { n.classList.add('expanded'); n.classList.remove('collapsed'); });
+    document.querySelectorAll('#mindmap [data-parent]').forEach(c => c.classList.remove('is-hidden'));
+    document.querySelectorAll('#mindmap [data-block], #mindmap [data-ability-block]').forEach(b => b.classList.remove('is-hidden'));
+    btn.textContent = '全部收缩';
+  }
+  requestAnimationFrame(drawConnections);
+}
+
+// ─── Level 2 下钻 ───
+function drillToLevel2(jobId, name, abilityFilter) {
+  const ab = abilities.find(a => a.job_id === jobId);
+  if (!ab) { toast('该岗位尚未生成能力图谱'); return; }
+  renderLevel2(ab, name, abilityFilter);
+  document.getElementById('level1View').classList.add('view-hidden');
+  document.getElementById('level2View').classList.remove('view-hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  requestAnimationFrame(() => requestAnimationFrame(drawConnections));
+}
+
+function renderLevel2(ab, name, abilityFilter) {
+  document.getElementById('l2Title').textContent = abilityFilter ? `${name} · ${abilityFilter}` : name;
+  const btn2 = document.getElementById('toggleAllBtn2');
+  if (btn2) btn2.textContent = '全部展开';
+
+  const abilityCol = document.getElementById('l2AbilityColumn');
+  const unitCol = document.getElementById('l2UnitColumn');
+  const pointCol = document.getElementById('l2PointColumn');
+  abilityCol.innerHTML = ''; unitCol.innerHTML = ''; pointCol.innerHTML = '';
+
+  if (!ab.data || !ab.data.length) return;
+
+  // 如果传入了 abilityFilter，只显示匹配的能力项
+  const dataToRender = abilityFilter
+    ? ab.data.filter(item => item.name === abilityFilter)
+    : ab.data;
+
+  dataToRender.forEach((abilityItem, ai) => {
+    const rootId = `l2-ability-${ai}`;
+    const skills = abilityItem.children || [];
+
+    // Column 1: 岗位能力（默认收缩）
+    const rootCard = document.createElement('div');
+    rootCard.className = 'node-card collapsed';
+    rootCard.dataset.node = rootId;
+    rootCard.dataset.type = 'ability';
+    rootCard.setAttribute('style', '--tone:var(--orange);--tone-soft:var(--orange-soft);');
+    rootCard.innerHTML = `
+      <button class="toggle-btn" onclick="toggleNode2('${rootId}')">›</button>
+      <span class="node-dot"></span>
+      <div class="node-main"><span class="node-title">${esc(abilityItem.name)}</span><span class="node-meta">${skills.length}个知识点/技能点</span></div>`;
+    abilityCol.appendChild(rootCard);
+
+    // Column 2: 能力单元（将技能分组展示）
+    const chunkSize = Math.ceil(skills.length / 3) || 1;
+    const unitGroups = [];
+    for (let i = 0; i < skills.length; i += chunkSize) {
+      unitGroups.push(skills.slice(i, i + chunkSize));
+    }
+    if (unitGroups.length === 0) unitGroups.push([{name: '待细化'}]);
+
+    unitGroups.forEach((group, ui) => {
+      const unitId = `l2-unit-${ai}-${ui}`;
+      const block = document.createElement('div');
+      block.className = 'group-block is-hidden';
+      block.dataset.block = unitId;
+      block.innerHTML = `
+        <div class="node-card collapsed" data-node="${unitId}" data-parent="${rootId}" data-type="unit" style="--tone:var(--rose);--tone-soft:var(--rose-soft);">
+          <button class="toggle-btn" onclick="toggleNode2('${unitId}')">›</button>
+          <span class="node-dot"></span>
+          <div class="node-main"><span class="node-title">能力单元 ${ui+1}</span><span class="node-meta">${group.length}个技能点</span></div>
+        </div>`;
+      unitCol.appendChild(block);
+
+      const pointBlock = document.createElement('div');
+      pointBlock.className = 'ability-block is-hidden';
+      pointBlock.dataset.abilityBlock = unitId;
+      group.forEach(sk => {
+        const pointId = `l2-point-${ai}-${ui}-${Math.random().toString(36).slice(2,6)}`;
+        const card = document.createElement('div');
+        card.className = 'node-card is-hidden';
+        card.dataset.node = pointId;
+        card.dataset.parent = unitId;
+        card.dataset.type = 'point';
+        card.setAttribute('style', '--tone:var(--green);--tone-soft:var(--green-soft);');
+        card.innerHTML = `<span class="node-dot"></span><div class="node-main"><span class="node-title">${esc(sk.name)}</span><span class="node-meta">知识点/技能点</span></div>`;
+        pointBlock.appendChild(card);
+      });
+      pointCol.appendChild(pointBlock);
+    });
+  });
+}
+
+function backToLevel1() {
+  document.getElementById('level2View').classList.add('view-hidden');
+  document.getElementById('level1View').classList.remove('view-hidden');
+  requestAnimationFrame(drawConnections);
+}
+
+function toggleNode2(nodeId) {
+  const node = document.querySelector(`#mindmap2 [data-node="${nodeId}"]`);
+  if (!node) return;
+  const willExpand = !node.classList.contains('expanded');
+  node.classList.toggle('expanded', willExpand);
+  node.classList.toggle('collapsed', !willExpand);
+  setDescendantsVisible2(nodeId, willExpand);
+  requestAnimationFrame(drawConnections);
+}
+
+function setDescendantsVisible2(parentId, visible) {
+  document.querySelectorAll(`#mindmap2 [data-parent="${parentId}"]`).forEach(child => {
+    child.classList.toggle('is-hidden', !visible);
+    const nodeId = child.dataset.node;
+    const block = document.querySelector(`#mindmap2 [data-block="${nodeId}"]`);
+    const abBlock = document.querySelector(`#mindmap2 [data-ability-block="${nodeId}"]`);
+    if (block) block.classList.toggle('is-hidden', !visible);
+    if (abBlock) abBlock.classList.toggle('is-hidden', !visible);
+    if (!visible) setDescendantsVisible2(nodeId, false);
+    else if (child.classList.contains('expanded')) setDescendantsVisible2(nodeId, true);
+  });
+}
+
+function toggleAllNodes2() {
+  const scope = document.getElementById('mindmap2');
+  if (!scope) return;
+  const btn = document.getElementById('toggleAllBtn2');
+  const shouldCollapse = btn ? btn.textContent.includes('收缩') : true;
+  const nodes = [...scope.querySelectorAll('[data-node]')];
+  nodes.forEach(n => { n.classList.toggle('expanded', !shouldCollapse); n.classList.toggle('collapsed', shouldCollapse); });
+  scope.querySelectorAll('[data-parent]').forEach(c => c.classList.toggle('is-hidden', shouldCollapse));
+  scope.querySelectorAll('[data-block], [data-ability-block]').forEach(b => b.classList.toggle('is-hidden', shouldCollapse));
+  if (btn) btn.textContent = shouldCollapse ? '全部展开' : '全部收缩';
+  requestAnimationFrame(drawConnections);
+}
+
+// ─── 搜索过滤 ───
+function filterColumn(type, keyword) {
+  const key = keyword.trim().toLowerCase();
+  const matchTitle = node => (node.querySelector('.node-title')?.textContent || '').toLowerCase().includes(key);
+
+  if (type === 'chain') {
+    document.querySelectorAll('#mindmap [data-type="chain"]').forEach(n => n.classList.toggle('search-hidden', key && !matchTitle(n)));
+  }
+  if (type === 'group') {
+    document.querySelectorAll('#mindmap [data-block]').forEach(block => {
+      const node = block.querySelector('[data-type="group"]');
+      const hidden = key && node && !matchTitle(node);
+      block.classList.toggle('search-hidden', !!hidden);
+      const ab = document.querySelector(`#mindmap [data-ability-block="${block.dataset.block}"]`);
+      if (ab) ab.classList.toggle('search-hidden', !!hidden);
+    });
+  }
+  if (type === 'ability') {
+    document.querySelectorAll('#mindmap [data-type="ability"]').forEach(n => n.classList.toggle('search-hidden', key && !matchTitle(n)));
+  }
+  requestAnimationFrame(drawConnections);
+}
+
+function filterColumn2(type, keyword) {
+  const key = keyword.trim().toLowerCase();
+  const matchTitle = node => (node.querySelector('.node-title')?.textContent || '').toLowerCase().includes(key);
+  const scope = document.getElementById('mindmap2');
+
+  if (type === 'ability') scope.querySelectorAll('[data-type="ability"]').forEach(n => n.classList.toggle('search-hidden', key && !matchTitle(n)));
+  if (type === 'unit') {
+    scope.querySelectorAll('[data-block]').forEach(block => {
+      const node = block.querySelector('[data-type="unit"]');
+      const hidden = key && node && !matchTitle(node);
+      block.classList.toggle('search-hidden', !!hidden);
+      const ab = scope.querySelector(`[data-ability-block="${block.dataset.block}"]`);
+      if (ab) ab.classList.toggle('search-hidden', !!hidden);
+    });
+  }
+  if (type === 'point') scope.querySelectorAll('[data-type="point"]').forEach(n => n.classList.toggle('search-hidden', key && !matchTitle(n)));
+  requestAnimationFrame(drawConnections);
+}
+
+// ─── 弹窗：新增产业链 ───
+function openChainModal() {
+  currentModalType = 'chain'; currentSimpleList = [];
+  document.getElementById('modalIcon').textContent = '链';
+  document.getElementById('modalIcon').style.setProperty('--modal-tone','#6867f2');
+  document.getElementById('modalIcon').style.setProperty('--modal-soft','#f0f0ff');
+  document.getElementById('modalTitle').textContent = '新增产业链';
+  document.getElementById('modalSubtitle').textContent = 'AI自动分析产业链生成相关岗位';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-top-input">
+      <label>产业链名称</label>
+      <div class="input-with-ai">
+        <input id="chainNameInput" placeholder="请输入产业链名称，如：智能制造、新能源汽车...">
+        <button class="ai-btn" onclick="aiGenerateChain(this)"><span class="ai-spinner"></span><span class="ai-text">AI分析</span></button>
+      </div>
+    </div>
+    <div class="add-row">
+      <input id="modalAddInput" placeholder="手动添加岗位名称" onkeydown="if(event.key==='Enter')addCard()">
+      <button class="btn btn-primary" onclick="addCard()">新增</button>
+    </div>`;
+  document.getElementById('modalFoot').style.display = 'flex';
+  document.getElementById('modalMask').classList.add('show');
+  renderCards();
+  setTimeout(() => document.getElementById('chainNameInput')?.focus(), 40);
+}
+
+// ─── AI 生成产业链 ───
+async function aiGenerateChain(btn) {
+  const input = document.getElementById('chainNameInput');
+  const name = input.value.trim();
+  if (!name) { toast('请输入产业链名称'); return; }
+
+  btn.classList.add('loading'); btn.disabled = true;
+  btn.querySelector('.ai-text').textContent = '分析中';
+
+  try {
+    const data = await api(API + '/chain/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+
+    if (data.error) {
+      toast('AI分析失败：' + data.error);
+    } else {
+      currentChainId = data.chain_id;
+      currentSimpleList = (data.jobs || []).map(j => j.name);
+      toast(`AI生成了 ${currentSimpleList.length} 个岗位，可手动编辑后保存`);
+      renderCards();
+    }
+  } catch (e) {
+    toast('网络请求失败，请确认服务器已启动');
+  }
+
+  btn.classList.remove('loading'); btn.disabled = false;
+  btn.querySelector('.ai-text').textContent = 'AI分析';
+}
+
+function addCard() {
+  const input = document.getElementById('modalAddInput');
+  const val = input.value.trim();
+  if (!val) { input.focus(); return; }
+  currentSimpleList.unshift(val);
+  input.value = '';
+  renderCards();
+}
+
+function deleteCard(idx) { currentSimpleList.splice(idx, 1); renderCards(); }
+
+function renderCards() {
+  const body = document.getElementById('modalBody');
+  body.querySelectorAll('.modal-card').forEach(el => el.remove());
+  currentSimpleList.forEach((name, i) => {
+    const card = document.createElement('div');
+    card.className = 'modal-card';
+    card.innerHTML = `<input class="modal-card-name" value="${esc(name)}" oninput="currentSimpleList[${i}]=this.value"><button class="card-delete" onclick="deleteCard(${i})">${TRASH}</button>`;
+    body.appendChild(card);
+  });
+}
+
+// ─── 弹窗：新增岗位 ───
+function openJobModal(chainId, chainName) {
+  currentModalType = 'job'; currentChainId = chainId; currentSimpleList = [];
+  document.getElementById('modalIcon').textContent = '岗';
+  document.getElementById('modalIcon').style.setProperty('--modal-tone','#12b7ee');
+  document.getElementById('modalIcon').style.setProperty('--modal-soft','#eaf9ff');
+  document.getElementById('modalTitle').textContent = chainName;
+  document.getElementById('modalSubtitle').textContent = '手动添加职业岗位';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="add-row">
+      <input id="modalAddInput" placeholder="请输入岗位名称" onkeydown="if(event.key==='Enter')addCard()">
+      <button class="btn btn-primary" onclick="addCard()">新增</button>
+    </div>`;
+  document.getElementById('modalFoot').style.display = 'flex';
+  document.getElementById('modalMask').classList.add('show');
+  renderCards();
+  setTimeout(() => document.getElementById('modalAddInput')?.focus(), 40);
+}
+
+// ─── 保存弹窗 ───
+async function saveModal() {
+  if (currentModalType === 'chain') {
+    // 产业链创建已在 AI 分析时完成，这里保存手动添加的岗位
+    if (currentChainId && currentSimpleList.length > 0) {
+      for (const name of currentSimpleList) {
+        await apiSafe(API + '/job/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chain_id: currentChainId, name }),
+        });
+      }
+    }
+    toast(`产业链已保存（${currentSimpleList.length}个岗位）`);
+  } else if (currentModalType === 'job') {
+    // 保存手动添加的岗位到已有产业链
+    if (currentChainId && currentSimpleList.length > 0) {
+      for (const name of currentSimpleList) {
+        await apiSafe(API + '/job/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chain_id: currentChainId, name }),
+        });
+      }
+      toast(`新增了 ${currentSimpleList.length} 个岗位`);
+    }
+  }
+  hideModal();
+  loadAllData();
+}
+
+function hideModal() { document.getElementById('modalMask').classList.remove('show'); }
+function closeModal(e) { if (e.target.id === 'modalMask') hideModal(); }
+
+// ─── 爬取数据 ───
+async function startCrawlForJob(jobId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '爬取中...'; }
+  const data = await apiSafe(API + '/crawl/start', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({job_id:jobId}) });
+  if (data.error) { toast(data.error); if (btn) { btn.disabled = false; btn.textContent = '① 爬取数据'; } return; }
+
+  const poll = async () => {
+    const s = await api(API + '/crawl/' + data.task_id + '/status');
+    if (s.status === 'completed') {
+      crawlStatus[jobId] = 'completed';
+      toast('爬取完成：' + s.total_results + '条数据');
+      loadAllData();
+    } else if (s.status === 'failed') {
+      toast('爬取失败'); if (btn) { btn.disabled = false; btn.textContent = '① 重试爬取'; }
+    } else {
+      if (btn) btn.textContent = s.status + '...';
+      setTimeout(poll, 2000);
+    }
+  };
+  setTimeout(poll, 2000);
+}
+
+// ─── 生成图谱 ───
+async function genAbilityForJob(jobId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+  const data = await apiSafe(API + '/ability/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({job_id:jobId}) });
+  if (data.error) { toast(data.error); if (btn) { btn.disabled = false; btn.textContent = '② 生成图谱'; } return; }
+
+  if (btn) btn.textContent = 'AI分析中...';
+  const poll = async () => {
+    const t = await api(API + '/ability/' + jobId + '/tree');
+    if (t.status === 'ready') {
+      toast('图谱生成完成！');
+      loadAllData();
+    } else {
+      setTimeout(poll, 3000);
+    }
+  };
+  setTimeout(poll, 3000);
+}
+
+// ─── 删除 ───
+async function deleteChain(id) {
+  if (!confirm('确定删除该产业链及其所有岗位？')) return;
+  await api(API + '/chain/' + id + '/delete', { method:'DELETE' }).catch(() => {});
+  toast('产业链已删除');
+  loadAllData();
+}
+
+async function deleteJob(id) {
+  if (!confirm('确定删除该岗位？')) return;
+  await api(API + '/job/' + id + '/delete', { method:'DELETE' });
+  toast('岗位已删除');
+  loadAllData();
+}
+
+// ─── 工具 ───
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+window.addEventListener('resize', drawConnections);
+window.addEventListener('load', () => { loadAllData(); requestAnimationFrame(drawConnections); });
+setTimeout(drawConnections, 200);
+</script>
+</body>
+</html>

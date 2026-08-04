@@ -1,0 +1,48 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ─── 虚拟环境 ───
+venv/
+.venv/
+env/
+.env
+
+# ─── Django ───
+*.log
+*.pot
+local_settings.py
+media/
+
+# ─── 数据库 ───
+data/db.sqlite3
+*.sqlite3
+
+# ─── 密钥 & 配置 ───
+.env
+*.secret
+spark_assistant.py
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── 系统文件 ───
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── 输出文件 ───
+output/
+data/*.json
+
+# ─── 爬取缓存 ───
+*.cachedump

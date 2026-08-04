@@ -1,0 +1,49 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ─── 虚拟环境 ───
+venv/
+.venv/
+env/
+.env
+
+# ─── Django ───
+*.log
+*.pot
+local_settings.py
+media/
+
+# ─── 数据库 ───
+*.sqlite3
+
+# ─── 密钥 & 配置 ───
+.env
+*.secret
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Node ───
+node_modules/
+
+# ─── 不上传的文档/数据文件夹 ───
+docs/
+references/
+工业机器人系统运维员/
+数控操作工/
+招聘数据处理/
