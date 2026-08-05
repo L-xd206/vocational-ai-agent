@@ -41,9 +41,17 @@ desktop.ini
 # ─── Node ───
 node_modules/
 
+# ─── Claude Code ───
+.claude/
+
 # ─── 不上传的文档/数据文件夹 ───
 docs/
 references/
 工业机器人系统运维员/
 数控操作工/
 招聘数据处理/
+
+# ─── 岗位能力 ───
+岗位能力/output/
+岗位能力/data/*.json
+岗位能力/spark_assistant.py
