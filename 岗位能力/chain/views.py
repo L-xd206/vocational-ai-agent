@@ -39,6 +39,7 @@ def api_chain_list(request):
     return JsonResponse({
         "chains": [{
             "id": c.id, "name": c.name, "description": c.description,
+            "enabled": c.is_enabled,
             "job_count": c.jobs.count(),
             "created_at": c.created_at.strftime("%Y-%m-%d %H:%M"),
         } for c in chains]
@@ -57,9 +58,11 @@ def api_chain_detail(request, chain_id):
         "id": chain.id,
         "name": chain.name,
         "description": chain.description,
+        "enabled": chain.is_enabled,
         "jobs": [{
             "id": j.id, "name": j.name, "aliases": j.aliases,
             "search_keywords": j.search_keywords, "is_confirmed": j.is_confirmed,
+            "enabled": j.is_enabled,
         } for j in chain.jobs.all()],
     })
 
@@ -68,6 +71,7 @@ def api_chain_detail(request, chain_id):
 @require_http_methods(["POST"])
 def api_chain_create(request):
     """新增产业链 + AI 生成岗位"""
+    chain = None
     try:
         data = json.loads(request.body)
         chain_name = data.get("name", "").strip()
@@ -85,7 +89,9 @@ def api_chain_create(request):
         ai_result = gen_jobs(chain_name)
 
         if not ai_result or not ai_result.get("jobs"):
-            return JsonResponse({"error": "AI生成失败", "chain_id": chain.id}, status=500)
+            failed_chain_id = chain.id
+            chain.delete()
+            return JsonResponse({"error": "AI生成失败", "chain_id": failed_chain_id}, status=500)
 
         # 3. 保存岗位
         saved_jobs = []
@@ -110,6 +116,8 @@ def api_chain_create(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        if chain is not None and chain.pk:
+            chain.delete()
         return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
 
 
@@ -165,6 +173,8 @@ def api_job_create(request):
             return JsonResponse({"error": "请输入岗位名称"}, status=400)
 
         chain = Chain.objects.get(id=chain_id)
+        if Job.objects.filter(chain=chain, name__iexact=job_name).exists():
+            return JsonResponse({"error": "该产业链下已存在同名岗位"}, status=400)
         job = Job.objects.create(chain=chain, name=job_name, is_confirmed=False)
         return JsonResponse({"id": job.id, "name": job.name})
     except Chain.DoesNotExist:

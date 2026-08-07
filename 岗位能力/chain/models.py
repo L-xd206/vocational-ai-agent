@@ -3,6 +3,7 @@ from django.db import models
 class Chain(models.Model):
     name = models.CharField("产业链名称", max_length=100, unique=True)
     description = models.CharField("描述", max_length=500, blank=True)
+    is_enabled = models.BooleanField("是否启用", default=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:
@@ -20,6 +21,7 @@ class Job(models.Model):
     aliases = models.JSONField("别名列表", default=list)
     search_keywords = models.JSONField("搜索关键词", default=list)
     is_confirmed = models.BooleanField("已确认", default=False)
+    is_enabled = models.BooleanField("是否启用", default=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:

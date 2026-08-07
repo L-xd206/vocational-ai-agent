@@ -7,7 +7,7 @@ from chain.views import page_chain_list, page_user_list, page_role_list
 # API
 from chain.views import api_chain_list, api_chain_detail, api_chain_create, api_chain_delete, api_job_create, api_job_update, api_job_delete
 from crawl.views import api_crawl_start, api_crawl_status
-from ability.views import api_ability_generate, api_ability_tree, api_ability_text
+from ability.views import api_ability_generate, api_ability_tree, api_ability_text, api_ability_node_toggle, api_ability_node_add
 
 
 def login_view(request):
@@ -89,4 +89,6 @@ urlpatterns = [
     path("api/ability/generate", api_ability_generate),
     path("api/ability/<int:job_id>/tree", api_ability_tree),
     path("api/ability/<int:job_id>/text", api_ability_text),
+    path("api/ability/node/toggle", api_ability_node_toggle),
+    path("api/ability/node/add", api_ability_node_add),
 ]
