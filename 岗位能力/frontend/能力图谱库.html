@@ -64,6 +64,11 @@
     .node-card.is-hidden, .group-block.is-hidden, .ability-block.is-hidden,
 .node-card.search-hidden, .group-block.search-hidden, .ability-block.search-hidden { display:none; }
     .node-card.collapsed { opacity:.86; }
+    .node-card.node-disabled { opacity:.55; filter:grayscale(.2); background:#f4f6f9; }
+    .status-btn { height:26px; padding:0 9px; border:1px solid #b8ead8; border-radius:8px; background:#effcf7; color:#15956b; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .status-btn.off { border-color:#e4c7cd; background:#fff5f6; color:#c05a68; }
+    .add-node-btn { width:26px; height:26px; border:1px solid #d8e3f0; border-radius:7px; background:#fff; color:#60728d; font-size:17px; line-height:1; cursor:pointer; }
+    .add-node-btn:hover { border-color:var(--tone); color:var(--tone); }
     .toggle-btn { width:22px; height:22px; display:grid; place-items:center; border:1px solid #e1e8f2; border-radius:7px; background:#fff; color:#8b99ae; font-size:13px; line-height:1; cursor:pointer; flex-shrink:0; transition:.2s ease; }
     .node-card.expanded .toggle-btn { transform:rotate(90deg); color:var(--tone); border-color:rgba(18,183,238,.25); }
     .node-dot { width:7px; height:7px; border-radius:50%; background:var(--tone); flex-shrink:0; }
@@ -90,6 +95,10 @@
     .modal-mask { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
     .modal-mask.show { display:flex; }
     .modal { width:560px; max-width:92vw; max-height:82vh; overflow:hidden; border:1px solid rgba(226,234,246,.95); border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; display:flex; flex-direction:column; }
+    .modal.single-add-modal { width:840px; }
+    .modal.single-add-modal .modal-body { grid-template-columns:1fr; padding:32px 30px; min-height:120px; }
+    .modal.single-add-modal .modal-card { margin-top:4px; min-height:48px; }
+    .modal.single-add-modal .modal-foot { padding:24px 30px 30px; }
     @keyframes modalIn { from{opacity:0;transform:translateY(14px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
     .modal-head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,#f7fbff,#eef6ff); border-bottom:1px solid #e7eef8; }
     .modal-title-wrap { display:flex; align-items:center; gap:12px; flex:1; }
@@ -113,6 +122,8 @@
     .input-with-ai { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
     .input-with-ai input { width:100%; height:40px; padding:0 12px; border:1px solid #dfe7f2; border-radius:10px; background:#fbfdff; color:#25324a; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
     .input-with-ai input:focus { border-color:var(--modal-tone,#12b7ee); box-shadow:0 0 0 3px rgba(18,183,238,.08); background:#fff; }
+    .college-select { width:100%; height:40px; padding:0 12px; border:1px solid #dfe7f2; border-radius:10px; background:#fbfdff; color:#25324a; font-size:13px; font-family:inherit; outline:none; }
+    .college-select:focus { border-color:#f4a51c; box-shadow:0 0 0 3px rgba(244,165,28,.12); background:#fff; }
     .ai-btn { height:40px; min-width:92px; display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid #a7f3d0; border-radius:10px; background:linear-gradient(135deg,#ecfdf5,#d1fae5); color:#059669; font-size:13px; font-weight:800; font-family:inherit; cursor:pointer; transition:.18s ease; }
     .ai-btn:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(5,150,105,.14); }
     .ai-btn.loading { pointer-events:none; color:#047857; background:#ecfdf5; }
@@ -233,6 +244,10 @@ const STROKE = { chain:'#6867f2', group:'#12b7ee', ability:'#f4a51c', unit:'#ec5
 const API = '/api';
 let currentModalType = '', currentChainId = '', currentGroupId = '';
 let currentSimpleList = [];
+let currentLevel2View = null;
+let currentAbilityJobId = null, currentAbilityCollege = '';
+let currentNodeParentType = '', currentNodeAbilityIndex = null, currentNodeUnitIndex = null;
+const COLLEGES = ['智能制造学院', '信息工程学院', '实训中心'];
 
 // ─── 数据状态 ───
 let chains = [],  jobs = [], abilities = [], crawlStatus = {};
@@ -260,10 +275,93 @@ async function apiSafe(url, opts = {}) {
   }
 }
 
+function enabledValue(node) { return node?.enabled !== false; }
+function statusButton(enabled, handler) {
+  return `<button class="status-btn ${enabled ? '' : 'off'}" onclick="${handler}">${enabled ? '启用' : '禁用'}</button>`;
+}
+function addNode(parentType, jobId, abilityIndex, unitIndex) {
+  const record = abilities.find(item => item.job_id === jobId);
+  const ability = record?.data?.[abilityIndex];
+  const unit = ability ? getUnits(ability)[unitIndex] : null;
+  const title = parentType === 'job' ? jobs.find(item => item.id === jobId)?.name
+    : parentType === 'ability' ? ability?.name : unit?.name;
+  openTreeNodeModal(parentType, jobId, abilityIndex, unitIndex, title || '新增节点');
+}
+function toggleNodeStatus(nodeType, nodeId, jobId, abilityIndex, unitIndex, pointIndex, enabled) {
+  apiSafe(API + '/ability/node/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    node_type: nodeType, node_id: nodeId, job_id: jobId, ability_index: abilityIndex,
+    unit_index: unitIndex, point_index: pointIndex, enabled: !enabled
+  })}).then(data => {
+    if (data.error) { toast(data.error); return; }
+    toast(`节点已${!enabled ? '启用' : '禁用'}`);
+    if (data.abilities) rerenderAfterTreeChange(jobId, data.abilities);
+    else loadAllData();
+  });
+}
+function nodeClass(enabled) { return enabled ? '' : ' node-disabled'; }
+function getUnits(abilityItem) {
+  if (Array.isArray(abilityItem.units)) return abilityItem.units;
+  const points = abilityItem.children || [];
+  const size = Math.ceil(points.length / 3) || 1;
+  const units = [];
+  for (let i = 0; i < points.length; i += size) units.push({name:`能力单元 ${units.length + 1}`, enabled:true, children:points.slice(i, i + size)});
+  return units;
+}
+
+function updateAbilityData(jobId, tree) {
+  let record = abilities.find(item => item.job_id === jobId);
+  if (!record) {
+    const job = jobs.find(item => item.id === jobId);
+    if (!job) return;
+    record = {id: jobId, job_id: jobId, job_name: job.name, chain_id: job.chain_id,
+      chain_name: job.chain_name, total_abilities: 0, total_skills: 0, data: []};
+    abilities.push(record);
+  }
+  record.data = tree || [];
+  record.total_abilities = record.data.length;
+  record.total_skills = record.data.reduce((sum, ability) =>
+    sum + getUnits(ability).reduce((unitSum, unit) => unitSum + (unit.children || []).length, 0), 0);
+}
+
+function captureExpandedState(scopeId) {
+  const scope = document.getElementById(scopeId);
+  if (!scope) return null;
+  return new Set([...scope.querySelectorAll('[data-node].expanded')].map(node => node.dataset.node));
+}
+
+function restoreExpandedState(scopeId, state, level) {
+  if (!state) return;
+  const scope = document.getElementById(scopeId);
+  if (!scope) return;
+  const setVisible = level === 2 ? setDescendantsVisible2 : setDescendantsVisible;
+  scope.querySelectorAll('[data-node]').forEach(node => {
+    const expanded = state.has(node.dataset.node);
+    node.classList.toggle('expanded', expanded);
+    node.classList.toggle('collapsed', !expanded);
+    setVisible(node.dataset.node, expanded);
+  });
+}
+
+function rerenderAfterTreeChange(jobId, tree) {
+  const level1State = captureExpandedState('mindmap');
+  const level2State = captureExpandedState('mindmap2');
+  updateAbilityData(jobId, tree);
+  renderStats();
+  if (currentLevel2View && currentLevel2View.jobId === jobId &&
+      !document.getElementById('level2View').classList.contains('view-hidden')) {
+    const record = abilities.find(item => item.job_id === jobId);
+    renderLevel2(record, currentLevel2View.name, currentLevel2View.abilityFilter, level2State);
+    requestAnimationFrame(() => requestAnimationFrame(drawConnections));
+  } else {
+    renderLevel1(level1State);
+  }
+}
+
 // ─── 加载全部数据 ───
 async function loadAllData() {
   // 加载产业链
   const chainRes = await api(API + '/chain/list');
+  if (chainRes.error) throw new Error(chainRes.error);
   chains = chainRes.chains || [];
 
   // 加载每个产业链的岗位
@@ -297,7 +395,7 @@ function renderStats() {
   const totalAbilities = abilities.length;
   const totalSkills = abilities.reduce((s, a) => s + a.total_skills, 0);
   let totalUnits = 0;
-  abilities.forEach(a => { if (a.data) a.data.forEach(ab => { totalUnits += (ab.children || []).length; }); });
+  abilities.forEach(a => { if (a.data) a.data.forEach(ab => { totalUnits += getUnits(ab).length; }); });
 
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card" style="--tone:var(--purple);--tone-soft:var(--purple-soft);--spark:linear-gradient(135deg,transparent 20%,#c7c7ff 100%);">
@@ -325,7 +423,7 @@ function renderStats() {
 }
 
 // ─── Level 1 渲染 ───
-function renderLevel1() {
+function renderLevel1(expandedState = null) {
   const chainCol = document.getElementById('chainColumn');
   const groupCol = document.getElementById('groupColumn');
   const abilityCol = document.getElementById('abilityColumn');
@@ -342,10 +440,11 @@ function renderLevel1() {
   chains.forEach(c => {
     const chainJobs = jobs.filter(j => j.chain_id === c.id);
     const hasAb = abilities.some(a => a.chain_id === c.id);
-    chainHtml += `<div class="node-card expanded" data-node="chain-${c.id}" data-type="chain" style="--tone:var(--purple);--tone-soft:var(--purple-soft);">
+    chainHtml += `<div class="node-card expanded${nodeClass(enabledValue(c))}" data-node="chain-${c.id}" data-type="chain" style="--tone:var(--purple);--tone-soft:var(--purple-soft);">
       <button class="toggle-btn" onclick="toggleNode('chain-${c.id}')">›</button>
       <span class="node-dot"></span>
       <div class="node-main"><span class="node-title">${esc(c.name)}</span><span class="node-meta">${chainJobs.length}个岗位${hasAb ? ' · 已生成图谱' : ''}</span></div>
+      ${statusButton(enabledValue(c), `toggleNodeStatus('chain',${c.id},null,null,null,null,${enabledValue(c)})`)}
       <button class="mini-btn" onclick="openJobModal(${c.id},'${escAttr(c.name)}')">新增岗位</button>
       <div class="node-actions">
         <button class="node-icon-btn danger" onclick="deleteChain(${c.id})" title="删除">${TRASH}</button>
@@ -375,10 +474,12 @@ function renderLevel1() {
       else statusMeta = '待爬取招聘数据';
 
       groupHtml += `<div class="group-block" data-block="${nodeId}">
-        <div class="node-card expanded" data-node="${nodeId}" data-parent="chain-${c.id}" data-type="group" style="--tone:var(--cyan);--tone-soft:var(--cyan-soft);">
+        <div class="node-card expanded${nodeClass(enabledValue(j))}" data-node="${nodeId}" data-parent="chain-${c.id}" data-type="group" style="--tone:var(--cyan);--tone-soft:var(--cyan-soft);">
           <button class="toggle-btn" onclick="toggleNode('${nodeId}')">›</button>
           <span class="node-dot"></span>
           <div class="node-main"><span class="node-title">${esc(j.name)}</span><span class="node-meta">${statusMeta}</span></div>
+          ${statusButton(enabledValue(j), `toggleNodeStatus('job',${j.id},${j.id},null,null,null,${enabledValue(j)})`)}
+          <button class="add-node-btn" onclick="openTreeNodeModal('job',${j.id},null,null,'${escAttr(j.name)}')" title="新增岗位能力">＋</button>
           ${actionBtn}
           <div class="node-actions">
             <button class="node-icon-btn danger" onclick="deleteJob(${j.id})" title="删除">${TRASH}</button>
@@ -388,10 +489,12 @@ function renderLevel1() {
 
       if (abData.length > 0) {
         abilityHtml += `<div class="ability-block" data-ability-block="${nodeId}">`;
-        abData.forEach(ab => {
-          abilityHtml += `<div class="node-card expanded" data-node="ability-${j.id}-${escAttr(ab.name)}" data-parent="${nodeId}" data-type="ability" style="--tone:var(--orange);--tone-soft:var(--orange-soft);">
+        abData.forEach((ab, ai) => {
+          abilityHtml += `<div class="node-card expanded${nodeClass(enabledValue(ab))}" data-node="ability-${j.id}-${ai}" data-parent="${nodeId}" data-type="ability" style="--tone:var(--orange);--tone-soft:var(--orange-soft);">
             <span class="node-dot"></span>
-            <div class="node-main"><span class="node-title">${esc(ab.name)}</span><span class="node-meta">${(ab.children||[]).length}个知识点/技能点</span></div>
+            <div class="node-main"><span class="node-title">${esc(ab.name)}</span><span class="node-meta">${esc(ab.college || '未分配学院')} · ${getUnits(ab).reduce((n,u) => n + (u.children||[]).length, 0)}个知识点/技能点</span></div>
+            ${statusButton(enabledValue(ab), `toggleNodeStatus('ability',null,${j.id},${ai},null,null,${enabledValue(ab)})`)}
+            <button class="add-node-btn" onclick="addNode('ability',${j.id},${ai})" title="新增能力单元">＋</button>
             <button class="view-btn" onclick="drillToLevel2(${j.id},'${escAttr(j.name)}','${escAttr(ab.name)}')">查看</button>
           </div>`;
         });
@@ -403,6 +506,8 @@ function renderLevel1() {
   chainCol.innerHTML = chainHtml;
   groupCol.innerHTML = groupHtml || '<div class="empty-hint">暂无岗位</div>';
   abilityCol.innerHTML = abilityHtml || '<div class="empty-hint">暂未生成能力图谱</div>';
+
+  restoreExpandedState('mindmap', expandedState, 1);
 
   requestAnimationFrame(drawConnections);
 }
@@ -504,13 +609,14 @@ function drillToLevel2(jobId, name, abilityFilter) {
   const ab = abilities.find(a => a.job_id === jobId);
   if (!ab) { toast('该岗位尚未生成能力图谱'); return; }
   renderLevel2(ab, name, abilityFilter);
+  currentLevel2View = {jobId, name, abilityFilter};
   document.getElementById('level1View').classList.add('view-hidden');
   document.getElementById('level2View').classList.remove('view-hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   requestAnimationFrame(() => requestAnimationFrame(drawConnections));
 }
 
-function renderLevel2(ab, name, abilityFilter) {
+function renderLevel2(ab, name, abilityFilter, expandedState = null) {
   document.getElementById('l2Title').textContent = abilityFilter ? `${name} · ${abilityFilter}` : name;
   const btn2 = document.getElementById('toggleAllBtn2');
   if (btn2) btn2.textContent = '全部展开';
@@ -527,63 +633,66 @@ function renderLevel2(ab, name, abilityFilter) {
     ? ab.data.filter(item => item.name === abilityFilter)
     : ab.data;
 
-  dataToRender.forEach((abilityItem, ai) => {
+  dataToRender.forEach((abilityItem, displayAi) => {
+    const ai = ab.data.indexOf(abilityItem);
     const rootId = `l2-ability-${ai}`;
-    const skills = abilityItem.children || [];
+    const units = getUnits(abilityItem);
+    const skills = units.flatMap(unit => unit.children || []);
 
     // Column 1: 岗位能力（默认收缩）
     const rootCard = document.createElement('div');
-    rootCard.className = 'node-card collapsed';
+    rootCard.className = 'node-card collapsed' + nodeClass(enabledValue(abilityItem));
     rootCard.dataset.node = rootId;
     rootCard.dataset.type = 'ability';
     rootCard.setAttribute('style', '--tone:var(--orange);--tone-soft:var(--orange-soft);');
     rootCard.innerHTML = `
       <button class="toggle-btn" onclick="toggleNode2('${rootId}')">›</button>
       <span class="node-dot"></span>
-      <div class="node-main"><span class="node-title">${esc(abilityItem.name)}</span><span class="node-meta">${skills.length}个知识点/技能点</span></div>`;
+      <div class="node-main"><span class="node-title">${esc(abilityItem.name)}</span><span class="node-meta">${skills.length}个知识点/技能点</span></div>
+      ${statusButton(enabledValue(abilityItem), `toggleNodeStatus('ability',null,${ab.job_id},${ai},null,null,${enabledValue(abilityItem)})`)}
+      <button class="add-node-btn" onclick="addNode('ability',${ab.job_id},${ai})" title="新增能力单元">＋</button>`;
     abilityCol.appendChild(rootCard);
 
     // Column 2: 能力单元（将技能分组展示）
-    const chunkSize = Math.ceil(skills.length / 3) || 1;
-    const unitGroups = [];
-    for (let i = 0; i < skills.length; i += chunkSize) {
-      unitGroups.push(skills.slice(i, i + chunkSize));
-    }
-    if (unitGroups.length === 0) unitGroups.push([{name: '待细化'}]);
-
-    unitGroups.forEach((group, ui) => {
+    units.forEach((unit, ui) => {
+      const group = unit.children || [];
       const unitId = `l2-unit-${ai}-${ui}`;
       const block = document.createElement('div');
       block.className = 'group-block is-hidden';
       block.dataset.block = unitId;
       block.innerHTML = `
-        <div class="node-card collapsed" data-node="${unitId}" data-parent="${rootId}" data-type="unit" style="--tone:var(--rose);--tone-soft:var(--rose-soft);">
+        <div class="node-card collapsed${nodeClass(enabledValue(unit))}" data-node="${unitId}" data-parent="${rootId}" data-type="unit" style="--tone:var(--rose);--tone-soft:var(--rose-soft);">
           <button class="toggle-btn" onclick="toggleNode2('${unitId}')">›</button>
           <span class="node-dot"></span>
-          <div class="node-main"><span class="node-title">能力单元 ${ui+1}</span><span class="node-meta">${group.length}个技能点</span></div>
+          <div class="node-main"><span class="node-title">${esc(unit.name || `能力单元 ${ui+1}`)}</span><span class="node-meta">${group.length}个技能点</span></div>
+          ${statusButton(enabledValue(unit), `toggleNodeStatus('unit',null,${ab.job_id},${ai},${ui},null,${enabledValue(unit)})`)}
+          <button class="add-node-btn" onclick="addNode('unit',${ab.job_id},${ai},${ui})" title="新增知识点/技能点">＋</button>
         </div>`;
       unitCol.appendChild(block);
 
       const pointBlock = document.createElement('div');
       pointBlock.className = 'ability-block is-hidden';
       pointBlock.dataset.abilityBlock = unitId;
-      group.forEach(sk => {
+      group.forEach((sk, pi) => {
         const pointId = `l2-point-${ai}-${ui}-${Math.random().toString(36).slice(2,6)}`;
         const card = document.createElement('div');
-        card.className = 'node-card is-hidden';
+        card.className = 'node-card is-hidden' + nodeClass(enabledValue(sk));
         card.dataset.node = pointId;
         card.dataset.parent = unitId;
         card.dataset.type = 'point';
         card.setAttribute('style', '--tone:var(--green);--tone-soft:var(--green-soft);');
-        card.innerHTML = `<span class="node-dot"></span><div class="node-main"><span class="node-title">${esc(sk.name)}</span><span class="node-meta">知识点/技能点</span></div>`;
+        card.innerHTML = `<span class="node-dot"></span><div class="node-main"><span class="node-title">${esc(sk.name)}</span><span class="node-meta">知识点/技能点</span></div>${statusButton(enabledValue(sk), `toggleNodeStatus('point',null,${ab.job_id},${ai},${ui},${pi},${enabledValue(sk)})`)}`;
         pointBlock.appendChild(card);
       });
       pointCol.appendChild(pointBlock);
     });
   });
+
+  restoreExpandedState('mindmap2', expandedState, 2);
 }
 
 function backToLevel1() {
+  currentLevel2View = null;
   document.getElementById('level2View').classList.add('view-hidden');
   document.getElementById('level1View').classList.remove('view-hidden');
   requestAnimationFrame(drawConnections);
@@ -729,6 +838,10 @@ function addCard() {
   const input = document.getElementById('modalAddInput');
   const val = input.value.trim();
   if (!val) { input.focus(); return; }
+  if (currentModalType === 'tree-node' && currentSimpleList.length) {
+    toast('一次只能新增一个节点');
+    return;
+  }
   currentSimpleList.unshift(val);
   input.value = '';
   renderCards();
@@ -739,12 +852,84 @@ function deleteCard(idx) { currentSimpleList.splice(idx, 1); renderCards(); }
 function renderCards() {
   const body = document.getElementById('modalBody');
   body.querySelectorAll('.modal-card').forEach(el => el.remove());
+  const single = currentModalType === 'tree-node' && currentSimpleList.length > 0;
+  const input = document.getElementById('modalAddInput');
+  const addButton = document.getElementById('singleAddBtn');
+  if (input) input.disabled = single;
+  if (addButton) addButton.disabled = single;
   currentSimpleList.forEach((name, i) => {
     const card = document.createElement('div');
     card.className = 'modal-card';
     card.innerHTML = `<input class="modal-card-name" value="${esc(name)}" oninput="currentSimpleList[${i}]=this.value"><button class="card-delete" onclick="deleteCard(${i})">${TRASH}</button>`;
     body.appendChild(card);
   });
+}
+
+function openAbilityModal(jobId, jobName) {
+  return openTreeNodeModal('job', jobId, null, null, jobName);
+  /* 兼容旧入口，实际统一使用单节点弹窗。 */
+  currentModalType = 'ability';
+  currentAbilityJobId = jobId;
+  currentAbilityCollege = '';
+  currentSimpleList = [];
+  document.getElementById('modalIcon').textContent = '能';
+  document.getElementById('modalIcon').style.setProperty('--modal-tone','#f4a51c');
+  document.getElementById('modalIcon').style.setProperty('--modal-soft','#fff7e6');
+  document.getElementById('modalTitle').textContent = jobName;
+  document.getElementById('modalSubtitle').textContent = '新增岗位能力并指定所属学院';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-top-input">
+      <label for="collegeSelect">所属学院</label>
+      <select id="collegeSelect" class="college-select" onchange="currentAbilityCollege=this.value">
+        <option value="">请选择学院</option>
+        ${COLLEGES.map(college => `<option value="${escAttr(college)}">${esc(college)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="add-row">
+      <input id="modalAddInput" placeholder="请输入岗位能力名称" onkeydown="if(event.key==='Enter')addCard()">
+      <button class="btn btn-primary" onclick="addCard()">新增</button>
+    </div>`;
+  document.getElementById('modalFoot').style.display = 'flex';
+  document.getElementById('modalMask').classList.add('show');
+  renderCards();
+  setTimeout(() => document.getElementById('collegeSelect')?.focus(), 40);
+}
+
+function openTreeNodeModal(parentType, jobId, abilityIndex, unitIndex, title) {
+  const labels = {job:'岗位能力', ability:'能力单元', unit:'知识点/技能点'};
+  const tones = {job:['#f4a51c','#fff7e6'], ability:['#ec5a8d','#fde8f1'], unit:['#23c18a','#e9fbf4']};
+  currentModalType = 'tree-node';
+  currentNodeParentType = parentType;
+  currentAbilityJobId = jobId;
+  currentNodeAbilityIndex = abilityIndex;
+  currentNodeUnitIndex = unitIndex;
+  currentAbilityCollege = '';
+  currentSimpleList = [];
+  const tone = tones[parentType] || tones.unit;
+  const modal = document.querySelector('#modalMask .modal');
+  modal.classList.add('single-add-modal');
+  document.getElementById('modalIcon').textContent = parentType === 'job' ? '能' : parentType === 'ability' ? '元' : '点';
+  document.getElementById('modalIcon').style.setProperty('--modal-tone', tone[0]);
+  document.getElementById('modalIcon').style.setProperty('--modal-soft', tone[1]);
+  document.getElementById('modalTitle').textContent = title || `新增${labels[parentType]}`;
+  document.getElementById('modalSubtitle').textContent = `新增${labels[parentType]}`;
+  const collegeField = parentType === 'job' ? `
+    <div class="modal-top-input">
+      <label for="collegeSelect">所属学院</label>
+      <select id="collegeSelect" class="college-select" onchange="currentAbilityCollege=this.value">
+        <option value="">请选择学院</option>
+        ${COLLEGES.map(college => `<option value="${escAttr(college)}">${esc(college)}</option>`).join('')}
+      </select>
+    </div>` : '';
+  document.getElementById('modalBody').innerHTML = `${collegeField}
+    <div class="add-row">
+      <input id="modalAddInput" placeholder="请输入${labels[parentType]}名称" onkeydown="if(event.key==='Enter')addCard()">
+      <button id="singleAddBtn" class="btn btn-primary" onclick="addCard()">新增</button>
+    </div>`;
+  document.getElementById('modalFoot').style.display = 'flex';
+  document.getElementById('modalMask').classList.add('show');
+  renderCards();
+  setTimeout(() => document.getElementById(parentType === 'job' ? 'collegeSelect' : 'modalAddInput')?.focus(), 40);
 }
 
 // ─── 弹窗：新增岗位 ───
@@ -768,7 +953,55 @@ function openJobModal(chainId, chainName) {
 
 // ─── 保存弹窗 ───
 async function saveModal() {
-  if (currentModalType === 'chain') {
+  if (currentModalType === 'tree-node') {
+    const name = currentSimpleList[0];
+    if (!name) {
+      toast('请先新增一个节点');
+      return;
+    }
+    if (currentNodeParentType === 'job' && !currentAbilityCollege) {
+      toast('请选择所属学院');
+      return;
+    }
+    const data = await apiSafe(API + '/ability/node/add', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        parent_type: currentNodeParentType, job_id: currentAbilityJobId,
+        ability_index: currentNodeAbilityIndex, unit_index: currentNodeUnitIndex,
+        name, college: currentAbilityCollege
+      })
+    });
+    if (data.error) {
+      toast(data.error);
+      return;
+    }
+    document.querySelector('#modalMask .modal').classList.remove('single-add-modal');
+    hideModal();
+    toast('节点已新增');
+    rerenderAfterTreeChange(currentAbilityJobId, data.abilities);
+    return;
+  } else if (currentModalType === 'ability') {
+    if (!currentAbilityCollege) {
+      toast('请选择所属学院');
+      return;
+    }
+    if (!currentSimpleList.length) {
+      toast('请至少新增一个岗位能力');
+      return;
+    }
+    for (const name of currentSimpleList) {
+      const data = await apiSafe(API + '/ability/node/add', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({parent_type:'job', job_id:currentAbilityJobId, name, college:currentAbilityCollege})
+      });
+      if (data.error) { toast(data.error); return; }
+    }
+    const tree = (await apiSafe(API + '/ability/' + currentAbilityJobId + '/tree')).abilities || [];
+    hideModal();
+    toast(`已新增${currentSimpleList.length}个岗位能力`);
+    rerenderAfterTreeChange(currentAbilityJobId, tree);
+    return;
+  } else if (currentModalType === 'chain') {
     // 产业链创建已在 AI 分析时完成，这里保存手动添加的岗位
     if (currentChainId && currentSimpleList.length > 0) {
       for (const name of currentSimpleList) {
@@ -797,7 +1030,10 @@ async function saveModal() {
   loadAllData();
 }
 
-function hideModal() { document.getElementById('modalMask').classList.remove('show'); }
+function hideModal() {
+  document.getElementById('modalMask').classList.remove('show');
+  document.querySelector('#modalMask .modal')?.classList.remove('single-add-modal');
+}
 function closeModal(e) { if (e.target.id === 'modalMask') hideModal(); }
 
 // ─── 爬取数据 ───
@@ -830,12 +1066,20 @@ async function genAbilityForJob(jobId, btn) {
 
   if (btn) btn.textContent = 'AI分析中...';
   const poll = async () => {
-    const t = await api(API + '/ability/' + jobId + '/tree');
-    if (t.status === 'ready') {
-      toast('图谱生成完成！');
-      loadAllData();
-    } else {
-      setTimeout(poll, 3000);
+    try {
+      const t = await api(API + '/ability/' + jobId + '/tree');
+      if (t.status === 'ready') {
+        toast('图谱生成完成！');
+        loadAllData();
+      } else if (t.status === 'error') {
+        toast('图谱生成失败：' + (t.error || '请查看服务端日志'));
+        if (btn) { btn.disabled = false; btn.textContent = '② 重试生成'; }
+      } else {
+        setTimeout(poll, 3000);
+      }
+    } catch (e) {
+      toast('图谱状态查询失败，请稍后重试');
+      if (btn) { btn.disabled = false; btn.textContent = '② 重试生成'; }
     }
   };
   setTimeout(poll, 3000);
@@ -861,7 +1105,16 @@ function esc(s) { const d=document.createElement('div'); d.textContent=s||''; re
 function escAttr(s) { return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 window.addEventListener('resize', drawConnections);
-window.addEventListener('load', () => { loadAllData(); requestAnimationFrame(drawConnections); });
+window.addEventListener('load', () => {
+  loadAllData().catch(e => {
+    document.getElementById('crumbText').textContent = '数据加载失败，请确认服务端已启动并执行数据库迁移';
+    document.getElementById('chainColumn').innerHTML = '<div class="empty-hint">数据加载失败</div>';
+    document.getElementById('groupColumn').innerHTML = '<div class="empty-hint">请检查服务端日志</div>';
+    document.getElementById('abilityColumn').innerHTML = '<div class="empty-hint">请刷新重试</div>';
+    console.error('能力图谱加载失败:', e);
+  });
+  requestAnimationFrame(drawConnections);
+});
 setTimeout(drawConnections, 200);
 </script>
 </body>

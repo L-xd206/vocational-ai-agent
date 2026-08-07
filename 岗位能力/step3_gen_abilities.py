@@ -9,6 +9,7 @@ Step 3: 并行生成全部岗位能力图谱
 """
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -25,33 +26,46 @@ MODEL = os.getenv("SPARK_MODEL", "generalv3.5")
 
 MAX_WORKERS = 3  # AI API 并发数（太大可能限流）
 
-PROMPT = """你是{job_name}岗位的企业技术培训师，有15年一线带徒和技能考评经验。
-请根据下面这些企业真实招聘要求，深度提取该岗位的核心技能清单，用于职业院校课程开发。
+PROMPT = """你是职业院校专业建设负责人，同时有多年{job_name}岗位的一线培训和技能考评经验。
+你的任务是把企业招聘要求转换成可以直接用于课程设计、实训任务和考核评价的岗位能力图谱。
 
-## 规则
-1. 每行一个能力，格式固定为：能力名---技能1/技能2/技能3/...
-2. 每个能力拆解为 5~10 个技能点，技能点越多越好
-3. 技能点必须具体到"使用XX工具/设备/软件，完成XX操作，达到XX标准/精度/指标"
-4. 从招聘要求原文中提取归纳，不要编造不存在的技能
-5. 能力项命名规范：XX操作/XX维修/XX调试/XX识读/XX检测/XX装配/XX运维/XX管理
-6. 覆盖该岗位所有细分方向（不同行业/不同设备/不同场景的差异化技能都要体现）
-7. 直接输出，不要序号、不要解释、不要分类标签
+## 生成标准
+1. 只提取招聘要求中有证据支持的内容；没有依据的设备、软件、标准和证书不要补写。
+2. 输出 6~12 个核心能力。每个能力应是一个可独立组织课程或实训项目的工作模块，不要把整份工作流程写成一个能力。
+3. 能力名称使用“对象 + 工作任务”，例如“数控机床操作”“工件装夹与找正”“加工质量检测”，不要使用“综合能力”“相关技能”“熟悉设备”等空泛名称。
+4. 每个能力输出 3~8 个技能点。每个技能点只能描述一个可观察、可考核的动作，不能用“并且、同时、以及”串联多个动作。
+5. 技能点必须尽量包含：操作对象、工具/设备/软件、动作和可验证结果。招聘要求没有给出具体数值时，使用“符合图纸、工艺卡或企业规范”，不要虚构精度数值。
+6. 按真实工作顺序组织：安全与准备 → 图纸/工艺 → 操作/装配/调试 → 检测 → 故障处理 → 维护与现场管理。没有证据的环节可以省略。
+7. 合并同义能力和重复技能；不同设备或工艺只有在招聘要求体现明显差异时才拆开。
+8. 技能点不要包含课程名称、学习目标、解释性前缀、序号或“会/熟悉/了解”等不可考核表达。
 
-## 技能点细化标准（每个技能点必须包含三个要素）
-- [工具]：使用什么工具/设备/软件
-- [操作]：完成什么具体操作
-- [标准]：达到什么精度/指标/规范要求
+## 输出格式（只输出 JSON，不要 Markdown 代码块和其他说明）
+{{
+  "job_name": "{job_name}",
+  "abilities": [
+    {{
+      "name": "能力名称",
+      "evidence": "招聘要求中支持该能力的关键词或事实",
+      "skills": [
+        {{
+          "name": "一个可观察的技能点",
+          "evidence": "对应的招聘要求关键词",
+          "assessment": "建议的可验证结果"
+        }}
+      ]
+    }}
+  ]
+}}
 
-## 正确示例
-低压配电系统运维---使用万用表测量三相四线制线路的相电压与线电压偏差不超过±5%/使用钳形电流表在设备满载时测量各相电流不平衡度不超过15%/使用2500V兆欧表测试低压电缆相间及对地绝缘电阻不低于1MΩ/根据回路计算电流选择匹配额定电流1.2~1.5倍的空气开关并完成整定/使用红外热像仪扫描配电柜母排及断路器接线端子温升不超过40K
-
-## 错误示例（太笼统，不合格）
-低压配电运维---会测电压/会测电流/会选开关
+## 反例
+- 能力：“具备较强综合能力”——不可用于课程设计。
+- 技能：“会操作设备并完成调试、检测和维护”——包含多个动作，必须拆成多个技能点。
+- 技能：“掌握相关软件”——没有对象和可验证结果。
 
 ## 招聘要求原文
 {requirements_text}
 
-请输出{job_name}岗位的完整技能清单（15~30项能力，越详细越好）："""
+请生成{job_name}岗位的课程开发级能力图谱。"""
 
 
 def gen_ability(job_name: str, requirements: list[str]) -> dict:
@@ -81,10 +95,21 @@ def gen_ability(job_name: str, requirements: list[str]) -> dict:
     try:
         text = call_assistant(prompt, temperature=0.3, max_tokens=8192)
 
-        # 统计
-        lines = [l for l in text.split("\n") if "---" in l and len(l) > 20]
-        n_abilities = len(lines)
-        n_skills = sum(len(l.split("---")[1].split("/")) for l in lines if "---" in l)
+        # 同时兼容新版 JSON 和旧版文本格式统计数量
+        n_abilities = 0
+        n_skills = 0
+        try:
+            clean_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.DOTALL)
+            payload = json.loads(clean_text)
+            items = payload.get("abilities", []) if isinstance(payload, dict) else payload
+            if isinstance(items, list):
+                n_abilities = len(items)
+                n_skills = sum(len(item.get("skills", item.get("children", [])) or [])
+                               for item in items if isinstance(item, dict))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            lines = [l for l in text.split("\n") if "---" in l and len(l) > 20]
+            n_abilities = len(lines)
+            n_skills = sum(len(l.split("---")[1].split("/")) for l in lines if "---" in l)
 
         return {
             "job_name": job_name,
