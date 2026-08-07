@@ -5,9 +5,9 @@ Step 1: AI生成产业链相关岗位清单
 输出：该产业链上主流岗位名称 + 搜索关键词 + 别名
 
 用法：
-  python step1_gen_jobs.py 智能制造
-  python step1_gen_jobs.py 新能源
-  python step1_gen_jobs.py 新能源汽车
+  python -m ai.jobs 智能制造
+  python -m ai.jobs 新能源
+  python -m ai.jobs 新能源汽车
 """
 import json
 import os

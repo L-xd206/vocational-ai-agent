@@ -50,6 +50,8 @@ education_platform/data/*.json
 
 # ─── 不上传的文档/数据文件夹 ───
 docs/
+!education_platform/docs/
+!education_platform/docs/**
 references/
 工业机器人系统运维员/
 数控操作工/

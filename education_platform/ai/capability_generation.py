@@ -4,8 +4,8 @@ Step 3: 并行生成全部岗位能力图谱
 读取 step2 爬取的招聘数据，调用AI并行生成每个岗位的能力图谱。
 
 用法:
-  python step3_gen_abilities.py 新能源    # 生成新能源全部岗位能力图谱
-  python step3_gen_abilities.py 智能制造  # 生成智能制造全部岗位能力图谱
+  python -m ai.capability_generation 新能源    # 生成新能源全部岗位能力图谱
+  python -m ai.capability_generation 智能制造  # 生成智能制造全部岗位能力图谱
 """
 import json
 import os

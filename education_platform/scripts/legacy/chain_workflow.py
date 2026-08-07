@@ -25,8 +25,8 @@ from pathlib import Path
 from collections import defaultdict
 
 # === 路径 ===
-BASE_DIR = Path(__file__).resolve().parent
-CHAINS_FILE = BASE_DIR / "chains.json"
+BASE_DIR = Path(__file__).resolve().parents[2]
+CHAINS_FILE = BASE_DIR / "data" / "seeds" / "chains.json"
 OUTPUT_DIR = BASE_DIR / "output"
 DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR.mkdir(exist_ok=True)

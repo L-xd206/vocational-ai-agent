@@ -144,7 +144,7 @@ def crawl_chain(chain_name: str, pages: int = PAGES_PER_KW):
     job_file = DATA_DIR / f"{chain_name}_岗位清单.json"
     if not job_file.exists():
         print(f"  [错误] 未找到 {job_file}")
-        print(f"  请先运行: python step1_gen_jobs.py {chain_name}")
+        print(f"  请先运行: python -m ai.jobs {chain_name}")
         return
 
     with open(job_file, "r", encoding="utf-8") as f:
