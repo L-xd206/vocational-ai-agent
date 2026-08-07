@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from .models import Chain, Job
+from .services import normalize_keywords, validate_job_name
 
 
 # 🔧 确保可以 import 同目录下的 step1 脚本
@@ -80,15 +81,28 @@ def api_chain_create(request):
 
         # 3. 保存岗位
         saved_jobs = []
+        seen_names = set()
         for job_data in ai_result.get("jobs", []):
+            try:
+                job_name = validate_job_name(job_data.get("name"))
+                keywords = normalize_keywords(job_data.get("search_keywords", []))
+            except ValueError:
+                continue
+            if job_name.casefold() in seen_names:
+                continue
+            seen_names.add(job_name.casefold())
             job = Job.objects.create(
                 chain=chain,
-                name=job_data.get("name", ""),
+                name=job_name,
                 aliases=job_data.get("aliases", []),
-                search_keywords=job_data.get("search_keywords", []),
+                search_keywords=keywords,
                 is_confirmed=False,
             )
-            saved_jobs.append({"id": job.id, "name": job.name})
+            saved_jobs.append({"id": job.id, "name": job.name, "search_keywords": job.search_keywords})
+
+        if not saved_jobs:
+            chain.delete()
+            return JsonResponse({"error": "AI未生成有效岗位或搜索关键词"}, status=500)
 
         return JsonResponse({
             "chain_id": chain.id,
@@ -114,6 +128,12 @@ def api_job_update(request, job_id):
         job = Job.objects.get(id=job_id)
         data = json.loads(request.body)
 
+        if "name" in data:
+            data["name"] = validate_job_name(data["name"])
+        if "search_keywords" in data:
+            data["search_keywords"] = normalize_keywords(data["search_keywords"])
+        elif not job.search_keywords:
+            raise ValueError("请至少填写3个不同的搜索关键词")
         if "aliases" in data:
             job.aliases = data["aliases"]
         if "search_keywords" in data:
@@ -128,6 +148,8 @@ def api_job_update(request, job_id):
 
     except Job.DoesNotExist:
         return JsonResponse({"error": "岗位不存在"}, status=404)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -153,16 +175,17 @@ def api_job_create(request):
     try:
         data = json.loads(request.body)
         chain_id = data.get("chain_id")
-        job_name = data.get("name", "").strip()
-        if not job_name:
-            return JsonResponse({"error": "请输入岗位名称"}, status=400)
+        job_name = validate_job_name(data.get("name"))
+        keywords = normalize_keywords(data.get("search_keywords", []))
 
         chain = Chain.objects.get(id=chain_id)
         if Job.objects.filter(chain=chain, name__iexact=job_name).exists():
             return JsonResponse({"error": "该产业链下已存在同名岗位"}, status=400)
-        job = Job.objects.create(chain=chain, name=job_name, is_confirmed=False)
-        return JsonResponse({"id": job.id, "name": job.name})
-    except Chain.DoesNotExist:
+        job = Job.objects.create(chain=chain, name=job_name, search_keywords=keywords, is_confirmed=False)
+        return JsonResponse({"id": job.id, "name": job.name, "search_keywords": job.search_keywords})
+    except (Chain.DoesNotExist, ValueError) as e:
+        if isinstance(e, ValueError):
+            return JsonResponse({"error": str(e)}, status=400)
         return JsonResponse({"error": "产业链不存在"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

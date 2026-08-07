@@ -1,4 +1,8 @@
 from django.urls import path
 
+from . import views
+
 app_name = "organizations"
-urlpatterns = []
+urlpatterns = [
+    path("api/organizations/colleges", views.api_college_list, name="college-list"),
+]

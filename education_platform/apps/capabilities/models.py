@@ -13,6 +13,18 @@ class AbilityMap(models.Model):
     raw_text = models.TextField("原始AI输出", blank=True)
     generation_status = models.CharField("生成状态", max_length=20, default="ready")
     generation_error = models.TextField("生成错误", blank=True)
+    review_status = models.CharField(
+        "审核状态",
+        max_length=20,
+        choices=[
+            ("pending", "待审核"),
+            ("confirmed", "已确认"),
+            ("rejected", "已退回"),
+        ],
+        default="pending",
+    )
+    review_note = models.TextField("审核意见", blank=True)
+    reviewed_at = models.DateTimeField("审核时间", null=True, blank=True)
     created_at = models.DateTimeField("生成时间", auto_now_add=True)
 
     class Meta:

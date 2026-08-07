@@ -3,11 +3,13 @@ import json
 import threading
 import copy
 import math
+from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from apps.industry.models import Job, Chain
 from apps.collection.models import CrawlTask
+from apps.organizations.models import College
 from .models import AbilityMap, parse_abilities_to_tree
 
 def _run_ability_gen(job_id: int):
@@ -39,6 +41,9 @@ def _run_ability_gen(job_id: int):
                     "raw_text": result["abilities_text"],
                     "generation_status": "ready",
                     "generation_error": "",
+                    "review_status": "pending",
+                    "review_note": "",
+                    "reviewed_at": None,
                 }
             )
         else:
@@ -68,7 +73,10 @@ def api_ability_generate(request):
         am, _ = AbilityMap.objects.get_or_create(job=job, defaults={"abilities_json": []})
         am.generation_status = "processing"
         am.generation_error = ""
-        am.save(update_fields=["generation_status", "generation_error"])
+        am.review_status = "pending"
+        am.review_note = ""
+        am.reviewed_at = None
+        am.save(update_fields=["generation_status", "generation_error", "review_status", "review_note", "reviewed_at"])
         t = threading.Thread(target=_run_ability_gen, args=(job_id,), daemon=True)
         t.start()
 
@@ -106,6 +114,9 @@ def api_ability_tree(request, job_id):
             "total_skills": am.total_skills,
             "abilities": tree,
             "status": "ready",
+            "review_status": am.review_status,
+            "review_note": am.review_note,
+            "reviewed_at": am.reviewed_at.isoformat() if am.reviewed_at else None,
             "crawl_status": "completed",
         })
 
@@ -184,7 +195,10 @@ def api_ability_node_toggle(request):
         else:
             return JsonResponse({"error": "不支持的节点类型"}, status=400)
         am.abilities_json = tree
-        am.save(update_fields=["abilities_json"])
+        am.review_status = "pending"
+        am.review_note = ""
+        am.reviewed_at = None
+        am.save(update_fields=["abilities_json", "review_status", "review_note", "reviewed_at"])
         return JsonResponse({"enabled": enabled, "abilities": tree})
     except (Chain.DoesNotExist, Job.DoesNotExist, AbilityMap.DoesNotExist, IndexError, KeyError, ValueError):
         return JsonResponse({"error": "节点不存在或节点路径无效"}, status=404)
@@ -200,7 +214,10 @@ def _toggle_job_tree(job, enabled):
     for ability in tree:
         _set_descendants_enabled(ability, enabled)
     am.abilities_json = tree
-    am.save(update_fields=["abilities_json"])
+    am.review_status = "pending"
+    am.review_note = ""
+    am.reviewed_at = None
+    am.save(update_fields=["abilities_json", "review_status", "review_note", "reviewed_at"])
 
 
 @csrf_exempt
@@ -215,7 +232,9 @@ def api_ability_node_add(request):
         if not name or parent_type not in {"job", "ability", "unit"}:
             return JsonResponse({"error": "节点名称或父节点类型无效"}, status=400)
         if parent_type == "job" and not college:
-            return JsonResponse({"error": "新增岗位能力时必须选择所属学院"}, status=400)
+            return JsonResponse({"error": "请选择所属学院"}, status=400)
+        if parent_type == "job" and not College.objects.filter(name=college, is_enabled=True).exists():
+            return JsonResponse({"error": "所选学院不存在或已禁用"}, status=400)
         job = Job.objects.get(id=data["job_id"])
         am, _ = AbilityMap.objects.get_or_create(job=job, defaults={"abilities_json": []})
         tree = _normalise_tree(am.abilities_json)
@@ -235,9 +254,12 @@ def api_ability_node_add(request):
                     return JsonResponse({"error": "该能力单元下已存在同名知识点/技能点"}, status=400)
                 unit["children"].append({"name": name, "enabled": unit["enabled"]})
         am.abilities_json = tree
+        am.review_status = "pending"
+        am.review_note = ""
+        am.reviewed_at = None
         am.total_abilities = len(tree)
         am.total_skills = sum(len(u.get("children", [])) for a in tree for u in a.get("units", []))
-        am.save(update_fields=["abilities_json", "total_abilities", "total_skills"])
+        am.save(update_fields=["abilities_json", "total_abilities", "total_skills", "review_status", "review_note", "reviewed_at"])
         return JsonResponse({"abilities": tree})
     except (Job.DoesNotExist, IndexError, KeyError, ValueError):
         return JsonResponse({"error": "节点路径无效"}, status=404)
@@ -246,6 +268,34 @@ def api_ability_node_add(request):
 
 
 @csrf_exempt
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_ability_review(request, job_id):
+    """负责人确认或退回能力图谱。"""
+    try:
+        data = json.loads(request.body or "{}")
+        status = data.get("status")
+        if status not in {"confirmed", "rejected", "pending"}:
+            return JsonResponse({"error": "审核状态无效"}, status=400)
+        am = AbilityMap.objects.get(job_id=job_id)
+        if am.generation_status != "ready":
+            return JsonResponse({"error": "能力图谱尚未生成完成"}, status=400)
+        am.review_status = status
+        am.review_note = str(data.get("note") or "").strip()
+        am.reviewed_at = timezone.now() if status != "pending" else None
+        am.save(update_fields=["review_status", "review_note", "reviewed_at"])
+        return JsonResponse({
+            "job_id": job_id,
+            "review_status": am.review_status,
+            "review_note": am.review_note,
+            "reviewed_at": am.reviewed_at.isoformat() if am.reviewed_at else None,
+        })
+    except AbilityMap.DoesNotExist:
+        return JsonResponse({"error": "能力图谱不存在"}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "无效的 JSON"}, status=400)
+
+
 def api_ability_text(request, job_id):
     """获取能力图谱原始文本"""
     try:
