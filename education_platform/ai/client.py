@@ -13,8 +13,28 @@ from datetime import datetime
 from time import mktime
 from wsgiref.handlers import format_date_time
 from urllib.parse import urlencode
+from pathlib import Path
 
 import websocket
+
+
+def _load_local_env() -> None:
+    """读取项目根目录的 .env；已有系统环境变量优先。"""
+    env_file = Path(__file__).resolve().parents[1] / ".env"
+    if not env_file.exists():
+        return
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_local_env()
 
 # 星辰Agent 配置
 SPARK_HOST = os.getenv("SPARK_HOST", "spark-openapi.cn-huabei-1.xf-yun.com")
