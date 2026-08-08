@@ -185,7 +185,6 @@
 
   <!-- Level 2 -->
   <div id="level2View" class="view-hidden">
-    <div id="abilityReviewActions"><button class="btn btn-primary" onclick="reviewCurrentAbility('confirmed')" id="l2ReviewBtn">确认能力图谱</button><button class="btn" onclick="reviewCurrentAbility('rejected')" id="l2RejectBtn">退回修改</button></div>
     <div class="l2-back-bar"><button class="btn" onclick="backToLevel1()">← 返回能力图谱库</button></div>
     <section class="page-head">
       <div>
@@ -246,6 +245,7 @@ const API = '/api';
 let currentModalType = '', currentChainId = '', currentGroupId = '';
 let currentSimpleList = [];
 let currentJobKeywords = [];
+let currentJobIds = [];
 let currentExistingJobNames = new Set();
 let currentLevel2View = null;
 let currentAbilityJobId = null, currentAbilityCollege = '';
@@ -253,7 +253,7 @@ let currentNodeParentType = '', currentNodeAbilityIndex = null, currentNodeUnitI
 const COLLEGES = [];
 
 // ─── 数据状态 ───
-let chains = [],  jobs = [], abilities = [], crawlStatus = {}, colleges = [];
+let chains = [],  jobs = [], abilities = [], crawlStatus = {}, crawlInfo = {}, colleges = [];
 // abilities: [{id, job_name, chain_name, chain_id, job_id, total_abilities, total_skills, data}]
 // crawlStatus: {job_id: 'completed'|'not_started'|'running'}
 
@@ -385,14 +385,24 @@ async function loadAllData() {
   // 加载能力图谱 + 爬取状态
   abilities = [];
   crawlStatus = {};
+  crawlInfo = {};
   for (const j of jobs) {
     try {
       const t = await api(API + '/ability/' + j.id + '/tree');
       crawlStatus[j.id] = t.crawl_status || 'not_started';
+      crawlInfo[j.id] = {
+        data_count: t.data_count || 0,
+        data_status: t.data_status || 'not_started',
+        data_message: t.data_message || '',
+        required_count: t.required_count || 10,
+      };
       if (t.status === 'ready') {
         abilities.push({ id: j.id, job_name: j.name, chain_name: j.chain_name, chain_id: j.chain_id, job_id: j.id, total_abilities: t.total_abilities, total_skills: t.total_skills, review_status: t.review_status || 'pending', review_note: t.review_note || '', data: t.abilities });
       }
-    } catch(e) { crawlStatus[j.id] = 'not_started'; }
+    } catch(e) {
+      crawlStatus[j.id] = 'not_started';
+      crawlInfo[j.id] = { data_count: 0, data_status: 'not_started', data_message: '', required_count: 10 };
+    }
   }
 
   renderStats();
@@ -465,21 +475,25 @@ function renderLevel1(expandedState = null) {
       const abData = jobAbilities.length > 0 ? jobAbilities[0].data : [];
       const nodeId = 'group-' + j.id;
       const cs = crawlStatus[j.id] || 'not_started';
+      const ci = crawlInfo[j.id] || { data_count: 0, data_status: 'not_started', required_count: 10 };
 
       // 三步流程按钮：爬取 → 生成图谱 → 查看
       let actionBtn = '';
       if (abData.length > 0) {
         actionBtn = `<button class="view-btn" onclick="drillToLevel2(${j.id},'${escAttr(j.name)}')">查看图谱</button>`;
-      } else if (cs === 'completed') {
-        actionBtn = `<button class="mini-btn" onclick="genAbilityForJob(${j.id},this)" style="color:#f4a51c;border-color:#f4a51c;">② 生成图谱</button>`;
-      } else {
+       } else if (cs === 'completed' && ['ready', 'sufficient'].includes(ci.data_status)) {
+         actionBtn = `<button class="mini-btn" onclick="genAbilityForJob(${j.id},this)" style="color:#f4a51c;border-color:#f4a51c;">② 生成图谱</button>`;
+       } else if (cs === 'completed' && ['no_data', 'insufficient'].includes(ci.data_status)) {
+         actionBtn = `<button class="mini-btn" disabled title="${escAttr(ci.data_message || '招聘数据不足，暂不生成能力图谱')}">数据不足，暂不生成</button>`;
+       } else {
         actionBtn = `<button class="mini-btn" onclick="startCrawlForJob(${j.id},this)">① 爬取数据</button>`;
       }
 
       // 状态描述
       let statusMeta = '';
-      if (abData.length > 0) statusMeta = `${abData.length}个岗位能力`;
-      else if (cs === 'completed') statusMeta = '已爬取 · 待生成图谱';
+       if (abData.length > 0) statusMeta = `${abData.length}个岗位能力`;
+       else if (cs === 'completed' && ['no_data', 'insufficient'].includes(ci.data_status)) statusMeta = `有效招聘数据 ${ci.data_count}/${ci.required_count} 条 · 暂不生成图谱`;
+       else if (cs === 'completed') statusMeta = `有效招聘数据 ${ci.data_count} 条 · 待生成图谱`;
       else statusMeta = '待爬取招聘数据';
 
       groupHtml += `<div class="group-block" data-block="${nodeId}">
@@ -626,13 +640,6 @@ function drillToLevel2(jobId, name, abilityFilter) {
 }
 
 function renderLevel2(ab, name, abilityFilter, expandedState = null) {
-  const reviewBtn = document.getElementById('l2ReviewBtn');
-  const rejectBtn = document.getElementById('l2RejectBtn');
-  if (reviewBtn) {
-    reviewBtn.textContent = ab.review_status === 'confirmed' ? '已确认' : '确认能力图谱';
-    reviewBtn.classList.toggle('btn-success', ab.review_status === 'confirmed');
-  }
-  if (rejectBtn) rejectBtn.disabled = ab.review_status === 'confirmed';
   document.getElementById('l2Title').textContent = abilityFilter ? `${name} · ${abilityFilter}` : name;
   const btn2 = document.getElementById('toggleAllBtn2');
   if (btn2) btn2.textContent = '全部展开';
@@ -705,23 +712,6 @@ function renderLevel2(ab, name, abilityFilter, expandedState = null) {
   });
 
   restoreExpandedState('mindmap2', expandedState, 2);
-}
-
-async function reviewCurrentAbility(desiredStatus = 'confirmed') {
-  if (!currentLevel2View) return;
-  const record = abilities.find(item => item.job_id === currentLevel2View.jobId);
-  if (!record) return;
-  const nextStatus = desiredStatus;
-  const note = nextStatus === 'rejected' ? (prompt('请输入退回原因（可选）') || '') : '';
-  const data = await apiSafe(API + '/ability/' + record.job_id + '/review', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({status: nextStatus, note})
-  });
-  if (data.error) { toast(data.error); return; }
-  record.review_status = data.review_status;
-  record.review_note = data.review_note || '';
-  renderLevel2(record, currentLevel2View.name, currentLevel2View.abilityFilter);
-  toast(nextStatus === 'confirmed' ? '能力图谱已确认' : '能力图谱已退回修改');
 }
 
 function backToLevel1() {
@@ -812,7 +802,7 @@ function filterColumn2(type, keyword) {
 // ─── 弹窗：新增产业链 ───
 function openChainModal() {
   currentModalType = 'chain'; currentSimpleList = [];
-  currentJobKeywords = []; currentExistingJobNames = new Set();
+  currentJobKeywords = []; currentJobIds = []; currentExistingJobNames = new Set();
   document.getElementById('modalIcon').textContent = '链';
   document.getElementById('modalIcon').style.setProperty('--modal-tone','#6867f2');
   document.getElementById('modalIcon').style.setProperty('--modal-soft','#f0f0ff');
@@ -860,6 +850,7 @@ async function aiGenerateChain(btn) {
       currentExistingJobNames = new Set((data.jobs || []).map(j => j.name));
       currentSimpleList = (data.jobs || []).map(j => j.name);
       currentJobKeywords = (data.jobs || []).map(j => j.search_keywords || []);
+      currentJobIds = (data.jobs || []).map(j => j.id || null);
       toast(`AI生成了 ${currentSimpleList.length} 个岗位，可手动编辑后保存`);
       renderCards();
     }
@@ -876,6 +867,19 @@ function addCard() {
   const val = input.value.trim();
   if (!val) { input.focus(); return; }
   if (currentModalType === 'chain' || currentModalType === 'job') {
+    const invalidNames = new Set(['a', 'ch', 'test', 'null', 'none', '未知', '无']);
+    const chineseCount = (val.match(/[\u4e00-\u9fff]/g) || []).length;
+    const alphaNumCount = (val.match(/[A-Za-z0-9]/g) || []).length;
+    if (invalidNames.has(val.toLowerCase()) || !/[\u4e00-\u9fffA-Za-z0-9]/.test(val) || (chineseCount < 2 && alphaNumCount < 4) || new Set(val.toLowerCase()).size === 1) {
+      toast('岗位名称无效，请输入真实、完整的岗位名称');
+      input.focus();
+      return;
+    }
+    if (currentSimpleList.some(name => String(name).trim().toLowerCase() === val.toLowerCase())) {
+      toast('岗位名称不能重复');
+      input.focus();
+      return;
+    }
     const keywordInput = document.getElementById('jobKeywordsInput');
     const keywords = (keywordInput?.value || '').split(/[,，;；\n]+/).map(v => v.trim()).filter(Boolean);
     if (keywords.length < 3) {
@@ -892,14 +896,26 @@ function addCard() {
     return;
   }
   currentSimpleList.unshift(val);
+  currentJobIds.unshift(null);
   input.value = '';
+  if (currentModalType === 'chain' || currentModalType === 'job') {
+    const keywordInput = document.getElementById('jobKeywordsInput');
+    if (keywordInput) keywordInput.value = '';
+  }
   renderCards();
 }
 
-function deleteCard(idx) {
-  if (currentExistingJobNames.has(currentSimpleList[idx])) { toast('AI生成的岗位请通过岗位管理修改'); return; }
+async function deleteCard(idx) {
+  const name = currentSimpleList[idx];
+  const jobId = currentJobIds[idx];
+  if (jobId) {
+    const data = await apiSafe(API + '/job/' + jobId + '/delete', { method: 'DELETE' });
+    if (data.error) { toast(data.error); return; }
+  }
   currentSimpleList.splice(idx, 1);
+  currentJobIds.splice(idx, 1);
   if (currentModalType === 'chain' || currentModalType === 'job') currentJobKeywords.splice(idx, 1);
+  currentExistingJobNames.delete(name);
   renderCards();
 }
 
@@ -924,7 +940,7 @@ function renderCards() {
     card.className = 'modal-card';
     const existing = currentExistingJobNames.has(name);
     card.innerHTML = existing
-      ? `<div class="modal-card-name">${esc(name)} <small>AI已生成</small></div>`
+      ? `<div class="modal-card-name">${esc(name)} <small>AI已生成</small></div><button class="card-delete" title="删除岗位" onclick="deleteCard(${i})">${TRASH}</button>`
       : `<input class="modal-card-name" value="${esc(name)}" oninput="currentSimpleList[${i}]=this.value"><button class="card-delete" onclick="deleteCard(${i})">${TRASH}</button>`;
     body.appendChild(card);
   });
@@ -937,6 +953,7 @@ function openAbilityModal(jobId, jobName) {
   currentAbilityJobId = jobId;
   currentAbilityCollege = '';
   currentSimpleList = [];
+  currentJobIds = [];
   document.getElementById('modalIcon').textContent = '能';
   document.getElementById('modalIcon').style.setProperty('--modal-tone','#f4a51c');
   document.getElementById('modalIcon').style.setProperty('--modal-soft','#fff7e6');
@@ -970,6 +987,7 @@ function openTreeNodeModal(parentType, jobId, abilityIndex, unitIndex, title) {
   currentNodeUnitIndex = unitIndex;
   currentAbilityCollege = '';
   currentSimpleList = [];
+  currentJobIds = [];
   const tone = tones[parentType] || tones.unit;
   const modal = document.querySelector('#modalMask .modal');
   modal.classList.add('single-add-modal');
@@ -1000,7 +1018,7 @@ function openTreeNodeModal(parentType, jobId, abilityIndex, unitIndex, title) {
 // ─── 弹窗：新增岗位 ───
 function openJobModal(chainId, chainName) {
   currentModalType = 'job'; currentChainId = chainId; currentSimpleList = [];
-  currentJobKeywords = []; currentExistingJobNames = new Set();
+  currentJobKeywords = []; currentJobIds = []; currentExistingJobNames = new Set();
   document.getElementById('modalIcon').textContent = '岗';
   document.getElementById('modalIcon').style.setProperty('--modal-tone','#12b7ee');
   document.getElementById('modalIcon').style.setProperty('--modal-soft','#eaf9ff');
@@ -1133,7 +1151,7 @@ async function startCrawlForJob(jobId, btn) {
     const s = await api(API + '/crawl/' + data.task_id + '/status');
     if (s.status === 'completed') {
       crawlStatus[jobId] = 'completed';
-      toast('爬取完成：' + s.total_results + '条数据');
+      toast('爬取完成：' + s.total_results + '条数据，正在检查有效招聘要求');
       loadAllData();
     } else if (s.status === 'failed') {
       toast('爬取失败'); if (btn) { btn.disabled = false; btn.textContent = '① 重试爬取'; }
@@ -1149,7 +1167,12 @@ async function startCrawlForJob(jobId, btn) {
 async function genAbilityForJob(jobId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
   const data = await apiSafe(API + '/ability/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({job_id:jobId}) });
-  if (data.error) { toast(data.error); if (btn) { btn.disabled = false; btn.textContent = '② 生成图谱'; } return; }
+   if (data.error) {
+     toast(data.error);
+     if (btn) { btn.disabled = false; btn.textContent = data.data_status === 'insufficient' || data.data_status === 'no_data' ? '数据不足，暂不生成' : '② 生成图谱'; }
+     loadAllData();
+     return;
+   }
 
   if (btn) btn.textContent = 'AI分析中...';
   const poll = async () => {

@@ -12,25 +12,10 @@ AI 岗位能力提取 — 本地调用大模型，从招聘数据生成能力图
 依赖:
   pip install openai
 
-配置方式一：讯飞星火（免费，推荐）
-  set SPARK_API_KEY=1fdedf8b62e0b4031332ffe418068a55
-  set SPARK_API_BASE=https://spark-api-open.xf-yun.com/v1
-  set SPARK_MODEL=spark-lite
-
-配置方式二：豆包/火山引擎
-  set OPENAI_API_KEY=你的Key
-  set SPARK_API_BASE=https://ark.cn-beijing.volces.com/api/v3
-  set SPARK_MODEL=doubao-pro-32k
-
-配置方式三：DeepSeek
-  set OPENAI_API_KEY=sk-xxx
-  set SPARK_API_BASE=https://api.deepseek.com/v1
-  set SPARK_MODEL=deepseek-chat
-
-配置方式四：ChatGPT / 通义千问 / 其他OpenAI兼容
-  set OPENAI_API_KEY=sk-xxx
-  set SPARK_API_BASE=https://api.openai.com/v1
-  set SPARK_MODEL=gpt-4o-mini
+配置方式：DeepSeek
+  set DEEPSEEK_API_KEY=你的Key
+  set DEEPSEEK_API_BASE=https://api.deepseek.com
+  set DEEPSEEK_MODEL=deepseek-chat
 """
 import json
 import os
@@ -42,9 +27,9 @@ OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # API 配置 — 自动从环境变量读取
-API_KEY = os.getenv("SPARK_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-API_BASE = os.getenv("SPARK_API_BASE", "https://spark-api-open.xf-yun.com/v1")
-MODEL = os.getenv("SPARK_MODEL", "generalv3.5")
+API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+API_BASE = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
+MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
 # ============================================================
 #  提示词模板
@@ -116,9 +101,9 @@ def load_job_data(filepath: str = None) -> tuple[str, list[str]]:
 # ============================================================
 def extract_via_ai(job_name: str, requirements: list[str]) -> str:
     """通过大模型提取能力列表"""
-    if not API_KEY or API_KEY == "your-spark-api-key-here":
+    if not API_KEY:
         print("\n  [警告] 未配置 API Key，使用本地统计模式代替")
-        print("  设置方式: set SPARK_API_KEY=your-key")
+        print("  设置方式: set DEEPSEEK_API_KEY=your-key")
         return extract_via_stats(job_name, requirements)
 
     from openai import OpenAI

@@ -20,10 +20,6 @@ DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-API_KEY = os.getenv("SPARK_API_KEY") or os.getenv("OPENAI_API_KEY") or "1fdedf8b62e0b4031332ffe418068a55:NmEzYmI5NDRkMzYxMGZmYTMyODMwOWNk"
-API_BASE = os.getenv("SPARK_API_BASE", "https://spark-api-open.xf-yun.com/v1")
-MODEL = os.getenv("SPARK_MODEL", "generalv3.5")
-
 MAX_WORKERS = 3  # AI API 并发数（太大可能限流）
 
 PROMPT = """你是职业院校专业建设负责人，同时有多年{job_name}岗位的一线培训和技能考评经验。

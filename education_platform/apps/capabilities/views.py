@@ -12,18 +12,39 @@ from apps.collection.models import CrawlTask
 from apps.organizations.models import College
 from .models import AbilityMap, parse_abilities_to_tree
 
+MIN_VALID_LISTINGS = 10
+
+
+def _valid_requirements(task):
+    """只保留包含有效任职要求的招聘记录，作为能力图谱分析依据。"""
+    from apps.collection.models import JobListing
+    reqs = list(JobListing.objects.filter(task=task).values_list("requirements", flat=True))
+    return [str(r).strip() for r in reqs if r and len(str(r).strip()) > 10]
+
+
+def _data_quality(count: int) -> tuple[str, str]:
+    if count == 0:
+        return "no_data", "暂无有效招聘数据，暂不生成能力图谱"
+    if count < MIN_VALID_LISTINGS:
+        return "insufficient", f"有效招聘数据仅 {count} 条，少于 {MIN_VALID_LISTINGS} 条，暂不生成能力图谱"
+    if count >= 30:
+        return "sufficient", f"有效招聘数据 {count} 条，数据较充分"
+    return "ready", f"有效招聘数据 {count} 条，可以生成能力图谱"
+
+
 def _run_ability_gen(job_id: int):
     """后台生成能力图谱"""
     try:
         job = Job.objects.get(id=job_id)
-        task = CrawlTask.objects.filter(job=job, status="completed").first()
+        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
         if not task:
             raise RuntimeError("请先完成招聘数据采集")
 
-        # 收集招聘要求
-        from apps.collection.models import JobListing
-        reqs = list(JobListing.objects.filter(task=task).values_list("requirements", flat=True))
-        reqs = [r for r in reqs if r and len(r) > 10]
+        # 先筛选有效招聘要求，避免让 AI 基于过少数据生成图谱
+        reqs = _valid_requirements(task)
+        if len(reqs) < MIN_VALID_LISTINGS:
+            quality, message = _data_quality(len(reqs))
+            raise RuntimeError(message)
 
         from ai.services import generate_capability_map
         result = generate_capability_map(job.name, reqs)
@@ -64,10 +85,19 @@ def api_ability_generate(request):
         job_id = data.get("job_id")
         job = Job.objects.get(id=job_id)
 
-        # 先检查是否已有爬取数据
-        task = CrawlTask.objects.filter(job=job, status="completed").first()
+        # 先检查是否已有爬取数据，并筛选有效招聘要求
+        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
         if not task:
             return JsonResponse({"error": "请先爬取招聘数据"}, status=400)
+        valid_count = len(_valid_requirements(task))
+        quality, message = _data_quality(valid_count)
+        if valid_count < MIN_VALID_LISTINGS:
+            return JsonResponse({
+                "error": message,
+                "data_status": quality,
+                "data_count": valid_count,
+                "required_count": MIN_VALID_LISTINGS,
+            }, status=400)
 
         # 后台生成
         am, _ = AbilityMap.objects.get_or_create(job=job, defaults={"abilities_json": []})
@@ -96,16 +126,24 @@ def api_ability_tree(request, job_id):
 
         # 同时检查爬取状态
         from apps.collection.models import CrawlTask
-        crawl_task = CrawlTask.objects.filter(job_id=job_id, status="completed").first()
+        crawl_task = CrawlTask.objects.filter(job_id=job_id, status="completed").order_by("-created_at").first()
         crawl_status = "completed" if crawl_task else "not_started"
+        data_count = len(_valid_requirements(crawl_task)) if crawl_task else 0
+        data_quality, data_message = _data_quality(data_count)
 
         if not am:
-            return JsonResponse({"abilities": [], "status": "not_generated", "crawl_status": crawl_status})
+            return JsonResponse({"abilities": [], "status": "not_generated", "crawl_status": crawl_status,
+                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "required_count": MIN_VALID_LISTINGS})
 
         if am.generation_status == "processing":
-            return JsonResponse({"abilities": [], "status": "processing", "error": "能力图谱正在生成", "crawl_status": crawl_status})
+            return JsonResponse({"abilities": [], "status": "processing", "error": "能力图谱正在生成", "crawl_status": crawl_status,
+                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "required_count": MIN_VALID_LISTINGS})
         if am.generation_status == "error":
-            return JsonResponse({"abilities": [], "status": "error", "error": am.generation_error or "能力图谱生成失败", "crawl_status": crawl_status})
+            return JsonResponse({"abilities": [], "status": "error", "error": am.generation_error or "能力图谱生成失败", "crawl_status": crawl_status,
+                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "required_count": MIN_VALID_LISTINGS})
 
         tree = _normalise_tree(am.abilities_json)
         return JsonResponse({
@@ -118,6 +156,10 @@ def api_ability_tree(request, job_id):
             "review_note": am.review_note,
             "reviewed_at": am.reviewed_at.isoformat() if am.reviewed_at else None,
             "crawl_status": "completed",
+            "data_count": data_count,
+            "data_status": data_quality,
+            "data_message": data_message,
+            "required_count": MIN_VALID_LISTINGS,
         })
 
     except Exception as e:

@@ -24,6 +24,9 @@ media/
 
 # ─── 密钥 & 配置 ───
 .env
+.env.*
+*.env
+!.env.example
 *.secret
 
 # ─── IDE ───

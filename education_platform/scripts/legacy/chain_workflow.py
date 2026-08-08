@@ -150,14 +150,14 @@ def crawl_job_multi_keyword(search_keywords: list[str], pages: int = CRAWL_PAGES
 def extract_abilities_ai(job_name: str, requirements: list[str]) -> str:
     """调用AI提取能力图谱（复用extract_abilities的逻辑）"""
     import os
-    api_key = os.getenv("SPARK_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
         return ""
 
     from openai import OpenAI
     client = OpenAI(
         api_key=api_key,
-        base_url=os.getenv("SPARK_API_BASE", "https://spark-api-open.xf-yun.com/v1"),
+        base_url=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
     )
 
     # 去重
@@ -190,7 +190,7 @@ def extract_abilities_ai(job_name: str, requirements: list[str]) -> str:
 
     try:
         resp = client.chat.completions.create(
-            model=os.getenv("SPARK_MODEL", "generalv3.5"),
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
             messages=[
                 {"role": "system", "content": "你只输出格式化的能力列表，每行格式：能力名---技能1/技能2/...，不输出任何解释。"},
                 {"role": "user", "content": prompt},

@@ -19,8 +19,6 @@ def _run_crawl(task_id: int):
         result = crawl_single_job({"name": task.job.name, "search_keywords": keywords}, pages=3)
 
         task.total_results = result.get("total_results", 0)
-        task.status = "completed"
-        task.save()
 
         # 保存招聘详情
         for item in result.get("results", []):
@@ -36,6 +34,9 @@ def _run_crawl(task_id: int):
                 post_date=item.get("date", ""),
                 source=item.get("source", ""),
             )
+        # 明细全部落库后再标记完成，避免前端提前开始能力图谱分析。
+        task.status = "completed"
+        task.save()
     except Exception as e:
         task = CrawlTask.objects.get(id=task_id)
         task.status = "failed"
