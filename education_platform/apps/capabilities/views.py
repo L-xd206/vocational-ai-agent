@@ -1,16 +1,26 @@
 """能力图谱 API"""
 import json
 import threading
-import copy
-import math
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from apps.industry.models import Job, Chain
 from apps.collection.models import CrawlTask
-from apps.organizations.models import College
-from .models import AbilityMap, parse_abilities_to_tree
+from .models import AbilityMap, AnalysisBatch, AnalysisNode, CapabilityNode, parse_abilities_to_tree
+from .services import (
+    adopt_analysis_node,
+    create_analysis_batch,
+    create_official_node,
+    merge_official_tree,
+    normalise_legacy_tree,
+    reject_analysis_node,
+    resolve_node_by_legacy_path,
+    serialize_official_tree,
+    serialize_analysis_tree,
+    set_job_tree_enabled,
+    set_node_enabled,
+)
 
 MIN_VALID_LISTINGS = 10
 
@@ -53,12 +63,18 @@ def _run_ability_gen(job_id: int):
             tree = parse_abilities_to_tree(result["abilities_text"])
             if not tree:
                 raise RuntimeError("AI返回内容无法解析为有效能力图谱")
+            tree = normalise_legacy_tree(tree)
+            merge_official_tree(job, tree, origin="ai")
             AbilityMap.objects.update_or_create(
                 job=job,
                 defaults={
                     "abilities_json": tree,
                     "total_abilities": len(tree),
-                    "total_skills": sum(len(item.get("children", [])) for item in tree),
+                    "total_skills": sum(
+                        len(unit.get("children", []))
+                        for item in tree
+                        for unit in item.get("units", [])
+                    ),
                     "raw_text": result["abilities_text"],
                     "generation_status": "ready",
                     "generation_error": "",
@@ -74,6 +90,38 @@ def _run_ability_gen(job_id: int):
         AbilityMap.objects.filter(job_id=job_id).update(
             generation_status="error", generation_error=str(e)
         )
+
+
+def _run_candidate_analysis(batch_id: int):
+    """后台把最新采集数据转换为候选树，不直接修改正式能力图谱。"""
+    batch = AnalysisBatch.objects.select_related("job", "crawl_task").get(id=batch_id)
+    try:
+        task = batch.crawl_task
+        if task is None or task.status != "completed":
+            raise RuntimeError("请先完成招聘数据采集")
+        requirements = _valid_requirements(task)
+        if len(requirements) < MIN_VALID_LISTINGS:
+            raise RuntimeError(_data_quality(len(requirements))[1])
+        from ai.services import generate_capability_map
+        result = generate_capability_map(batch.job.name, requirements)
+        if not result or not result.get("abilities_text"):
+            raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
+        tree = parse_abilities_to_tree(result["abilities_text"])
+        if not tree:
+            raise RuntimeError("AI返回内容无法解析为有效能力图谱")
+        create_analysis_batch(
+            batch.job,
+            tree,
+            crawl_task=task,
+            raw_ai_output=result["abilities_text"],
+            model_name="deepseek-chat",
+            batch=batch,
+        )
+    except Exception as exc:
+        batch.status = "failed"
+        batch.error_message = str(exc)
+        batch.finished_at = timezone.now()
+        batch.save(update_fields=["status", "error_message", "finished_at"])
 
 
 @csrf_exempt
@@ -131,30 +179,38 @@ def api_ability_tree(request, job_id):
         data_count = len(_valid_requirements(crawl_task)) if crawl_task else 0
         data_quality, data_message = _data_quality(data_count)
 
-        if not am:
+        has_nodes = CapabilityNode.objects.filter(job_id=job_id).exists()
+        if not am and not has_nodes:
             return JsonResponse({"abilities": [], "status": "not_generated", "crawl_status": crawl_status,
                                  "data_count": data_count, "data_status": data_quality, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
 
-        if am.generation_status == "processing":
+        if am and am.generation_status == "processing":
             return JsonResponse({"abilities": [], "status": "processing", "error": "能力图谱正在生成", "crawl_status": crawl_status,
                                  "data_count": data_count, "data_status": data_quality, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
-        if am.generation_status == "error":
+        if am and am.generation_status == "error":
             return JsonResponse({"abilities": [], "status": "error", "error": am.generation_error or "能力图谱生成失败", "crawl_status": crawl_status,
                                  "data_count": data_count, "data_status": data_quality, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
 
-        tree = _normalise_tree(am.abilities_json)
+        job = Job.objects.get(id=job_id)
+        tree = serialize_official_tree(job)
+        total_abilities = sum(1 for item in tree)
+        total_skills = sum(
+            len(unit.get("children", []))
+            for ability in tree
+            for unit in ability.get("units", [])
+        )
         return JsonResponse({
-            "job_name": am.job.name,
-            "total_abilities": am.total_abilities,
-            "total_skills": am.total_skills,
+            "job_name": job.name,
+            "total_abilities": total_abilities,
+            "total_skills": total_skills,
             "abilities": tree,
             "status": "ready",
-            "review_status": am.review_status,
-            "review_note": am.review_note,
-            "reviewed_at": am.reviewed_at.isoformat() if am.reviewed_at else None,
+            "review_status": am.review_status if am else "pending",
+            "review_note": am.review_note if am else "",
+            "reviewed_at": am.reviewed_at.isoformat() if am and am.reviewed_at else None,
             "crawl_status": "completed",
             "data_count": data_count,
             "data_status": data_quality,
@@ -167,33 +223,8 @@ def api_ability_tree(request, job_id):
 
 
 def _normalise_tree(tree):
-    """兼容旧版仅有 children 的图谱，同时给每一级补齐启用状态。"""
-    result = copy.deepcopy(tree or [])
-    for ability in result:
-        ability.setdefault("enabled", True)
-        ability.setdefault("college", "未分配学院")
-        if "units" not in ability:
-            points = ability.pop("children", []) or []
-            size = math.ceil(len(points) / 3) if points else 1
-            ability["units"] = [
-                {"name": f"能力单元 {index // size + 1}", "enabled": True,
-                 "children": [{**point, "enabled": point.get("enabled", True)} for point in points[index:index + size]]}
-                for index in range(0, len(points), size)
-            ]
-        for unit in ability["units"]:
-            unit.setdefault("enabled", True)
-            unit.setdefault("children", [])
-            for point in unit["children"]:
-                point.setdefault("enabled", True)
-    return result
-
-
-def _set_descendants_enabled(node, enabled):
-    node["enabled"] = enabled
-    for unit in node.get("units", []):
-        _set_descendants_enabled(unit, enabled)
-    for point in node.get("children", []):
-        point["enabled"] = enabled
+    """旧导入路径兼容入口；新代码统一使用 services.normalise_legacy_tree。"""
+    return normalise_legacy_tree(tree)
 
 
 @csrf_exempt
@@ -213,7 +244,7 @@ def api_ability_node_toggle(request):
                 for job in chain.jobs.all():
                     job.is_enabled = False
                     job.save(update_fields=["is_enabled"])
-                    _toggle_job_tree(job, False)
+                    set_job_tree_enabled(job, False)
             return JsonResponse({"enabled": enabled})
 
         job = Job.objects.get(id=data["job_id"])
@@ -221,45 +252,34 @@ def api_ability_node_toggle(request):
             job.is_enabled = enabled
             job.save(update_fields=["is_enabled"])
             if not enabled:
-                _toggle_job_tree(job, False)
+                set_job_tree_enabled(job, False)
             return JsonResponse({"enabled": enabled})
 
-        am = AbilityMap.objects.get(job=job)
-        tree = _normalise_tree(am.abilities_json)
-        ai = int(data["ability_index"])
-        if node_type == "ability":
-            _set_descendants_enabled(tree[ai], enabled)
-        elif node_type == "unit":
-            unit = tree[ai]["units"][int(data["unit_index"])]
-            _set_descendants_enabled(unit, enabled)
-        elif node_type == "point":
-            tree[ai]["units"][int(data["unit_index"])]["children"][int(data["point_index"])] ["enabled"] = enabled
-        else:
+        if node_type not in {"ability", "unit", "point"}:
             return JsonResponse({"error": "不支持的节点类型"}, status=400)
-        am.abilities_json = tree
-        am.review_status = "pending"
-        am.review_note = ""
-        am.reviewed_at = None
-        am.save(update_fields=["abilities_json", "review_status", "review_note", "reviewed_at"])
+        node_id = data.get("node_id")
+        if node_id and str(node_id).isdigit():
+            node = CapabilityNode.objects.get(id=int(node_id), job=job, node_type=node_type)
+        else:
+            node = resolve_node_by_legacy_path(
+                job,
+                node_type,
+                data.get("ability_index"),
+                data.get("unit_index"),
+                data.get("point_index"),
+            )
+        set_node_enabled(node, enabled)
+        tree = serialize_official_tree(job)
         return JsonResponse({"enabled": enabled, "abilities": tree})
-    except (Chain.DoesNotExist, Job.DoesNotExist, AbilityMap.DoesNotExist, IndexError, KeyError, ValueError):
+    except (Chain.DoesNotExist, Job.DoesNotExist, CapabilityNode.DoesNotExist, IndexError, KeyError, TypeError, ValueError):
         return JsonResponse({"error": "节点不存在或节点路径无效"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
 
 def _toggle_job_tree(job, enabled):
-    am = AbilityMap.objects.filter(job=job).first()
-    if not am:
-        return
-    tree = _normalise_tree(am.abilities_json)
-    for ability in tree:
-        _set_descendants_enabled(ability, enabled)
-    am.abilities_json = tree
-    am.review_status = "pending"
-    am.review_note = ""
-    am.reviewed_at = None
-    am.save(update_fields=["abilities_json", "review_status", "review_note", "reviewed_at"])
+    """兼容旧调用；正式数据已经迁移到节点表。"""
+    set_job_tree_enabled(job, enabled)
 
 
 @csrf_exempt
@@ -275,41 +295,27 @@ def api_ability_node_add(request):
             return JsonResponse({"error": "节点名称或父节点类型无效"}, status=400)
         if parent_type == "job" and not college:
             return JsonResponse({"error": "请选择所属学院"}, status=400)
-        if parent_type == "job" and not College.objects.filter(name=college, is_enabled=True).exists():
-            return JsonResponse({"error": "所选学院不存在或已禁用"}, status=400)
         job = Job.objects.get(id=data["job_id"])
-        am, _ = AbilityMap.objects.get_or_create(job=job, defaults={"abilities_json": []})
-        tree = _normalise_tree(am.abilities_json)
-        if parent_type == "job":
-            if any(str(item.get("name", "")).strip().casefold() == name.casefold() for item in tree):
-                return JsonResponse({"error": "该岗位下已存在同名岗位能力"}, status=400)
-            tree.append({"name": name, "college": college, "enabled": job.is_enabled, "units": []})
-        else:
-            ability = tree[int(data["ability_index"])]
-            if parent_type == "ability":
-                if any(str(item.get("name", "")).strip().casefold() == name.casefold() for item in ability["units"]):
-                    return JsonResponse({"error": "该岗位能力下已存在同名能力单元"}, status=400)
-                ability["units"].append({"name": name, "enabled": ability["enabled"], "children": []})
-            else:
-                unit = ability["units"][int(data["unit_index"])]
-                if any(str(item.get("name", "")).strip().casefold() == name.casefold() for item in unit["children"]):
-                    return JsonResponse({"error": "该能力单元下已存在同名知识点/技能点"}, status=400)
-                unit["children"].append({"name": name, "enabled": unit["enabled"]})
-        am.abilities_json = tree
-        am.review_status = "pending"
-        am.review_note = ""
-        am.reviewed_at = None
-        am.total_abilities = len(tree)
-        am.total_skills = sum(len(u.get("children", [])) for a in tree for u in a.get("units", []))
-        am.save(update_fields=["abilities_json", "total_abilities", "total_skills", "review_status", "review_note", "reviewed_at"])
+        create_official_node(
+            job=job,
+            parent_type=parent_type,
+            name=name,
+            college_name=college,
+            ability_index=data.get("ability_index"),
+            unit_index=data.get("unit_index"),
+        )
+        tree = serialize_official_tree(job)
         return JsonResponse({"abilities": tree})
-    except (Job.DoesNotExist, IndexError, KeyError, ValueError):
+    except Job.DoesNotExist:
+        return JsonResponse({"error": "岗位不存在"}, status=404)
+    except (IndexError, KeyError, TypeError):
         return JsonResponse({"error": "节点路径无效"}, status=404)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_ability_review(request, job_id):
@@ -347,3 +353,103 @@ def api_ability_text(request, job_id):
         return JsonResponse({"text": am.raw_text})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_start(request):
+    """基于岗位最新的已完成采集任务启动一批 AI 候选能力分析。"""
+    try:
+        data = json.loads(request.body or "{}")
+        job = Job.objects.get(id=data.get("job_id"))
+        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
+        if task is None:
+            return JsonResponse({"error": "请先完成招聘数据采集"}, status=400)
+        valid_count = len(_valid_requirements(task))
+        if valid_count < MIN_VALID_LISTINGS:
+            quality, message = _data_quality(valid_count)
+            return JsonResponse({
+                "error": message,
+                "data_status": quality,
+                "data_count": valid_count,
+                "required_count": MIN_VALID_LISTINGS,
+            }, status=400)
+        batch = AnalysisBatch.objects.create(
+            job=job,
+            crawl_task=task,
+            status="processing",
+            input_listing_count=valid_count,
+            model_name="deepseek-chat",
+            started_at=timezone.now(),
+        )
+        threading.Thread(target=_run_candidate_analysis, args=(batch.id,), daemon=True).start()
+        return JsonResponse({"batch_id": batch.id, "status": batch.status})
+    except Job.DoesNotExist:
+        return JsonResponse({"error": "岗位不存在"}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "无效的 JSON"}, status=400)
+
+
+def api_analysis_tree(request, batch_id):
+    """获取某次 AI 分析的实体/虚体候选树。"""
+    try:
+        batch = AnalysisBatch.objects.select_related("job").get(id=batch_id)
+        return JsonResponse({
+            "batch_id": batch.id,
+            "job_id": batch.job_id,
+            "job_name": batch.job.name,
+            "status": batch.status,
+            "error": batch.error_message,
+            "tree": serialize_analysis_tree(batch) if batch.status == "completed" else [],
+        })
+    except AnalysisBatch.DoesNotExist:
+        return JsonResponse({"error": "分析批次不存在"}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_node_adopt(request, node_id):
+    """引用一个虚体节点；必要时自动补齐其虚体祖先。"""
+    try:
+        node = AnalysisNode.objects.select_related("batch__job", "parent", "matched_node").get(id=node_id)
+        official = adopt_analysis_node(node)
+        return JsonResponse({
+            "node_id": node.id,
+            "matched_node_id": official.id,
+            "decision_status": "adopted",
+            "abilities": serialize_official_tree(node.batch.job),
+        })
+    except AnalysisNode.DoesNotExist:
+        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_node_reject(request, node_id):
+    """拒纳一个虚体节点及其所有候选子节点。"""
+    try:
+        node = AnalysisNode.objects.select_related("matched_node").get(id=node_id)
+        reject_analysis_node(node)
+        return JsonResponse({"node_id": node.id, "decision_status": "rejected"})
+    except AnalysisNode.DoesNotExist:
+        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+def api_rejected_analysis_tree(request):
+    """获取某岗位最近分析批次中的未采纳节点树。"""
+    job_id = request.GET.get("job_id")
+    batches = AnalysisBatch.objects.filter(status="completed")
+    if job_id:
+        batches = batches.filter(job_id=job_id)
+    batch = batches.order_by("-created_at").first()
+    if batch is None:
+        return JsonResponse({"batch_id": None, "tree": []})
+    return JsonResponse({
+        "batch_id": batch.id,
+        "job_id": batch.job_id,
+        "tree": serialize_analysis_tree(batch, decision_status="rejected"),
+    })

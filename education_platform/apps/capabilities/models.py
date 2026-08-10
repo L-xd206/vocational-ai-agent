@@ -2,6 +2,7 @@ import json
 import re
 
 from django.db import models
+from django.db.models import Q
 
 
 class AbilityMap(models.Model):
@@ -137,3 +138,184 @@ def _parse_structured_abilities(items):
             node["evidence"] = str(item["evidence"]).strip()
         nodes.append(node)
     return nodes
+
+
+def normalise_node_name(value):
+    """生成用于同级去重和 AI 匹配的稳定名称。"""
+    return re.sub(r"\s+", "", _clean_name(value)).casefold()
+
+
+class CapabilityNode(models.Model):
+    """正式能力图谱节点：岗位能力、能力单元或知识点/技能点。"""
+
+    NODE_TYPES = [
+        ("ability", "岗位能力"),
+        ("unit", "能力单元"),
+        ("point", "知识点/技能点"),
+    ]
+    ORIGIN_TYPES = [
+        ("manual", "人工创建"),
+        ("ai", "AI 分析并引用"),
+        ("legacy", "历史 JSON 迁移"),
+    ]
+
+    job = models.ForeignKey(
+        "chain.Job", on_delete=models.CASCADE,
+        related_name="capability_nodes", verbose_name="所属岗位",
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, related_name="children",
+        null=True, blank=True, verbose_name="父节点",
+    )
+    node_type = models.CharField("节点类型", max_length=20, choices=NODE_TYPES)
+    name = models.CharField("节点名称", max_length=200)
+    normalized_name = models.CharField("标准化名称", max_length=200, editable=False)
+    college = models.ForeignKey(
+        "organizations.College", on_delete=models.SET_NULL,
+        related_name="capability_nodes", null=True, blank=True,
+        verbose_name="所属学院",
+    )
+    origin = models.CharField(
+        "节点来源", max_length=20, choices=ORIGIN_TYPES, default="manual",
+    )
+    is_enabled = models.BooleanField("是否启用", default=True)
+    sort_order = models.PositiveIntegerField("同级排序", default=0)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        db_table = "capability_node"
+        ordering = ["sort_order", "id"]
+        verbose_name = "能力节点"
+        verbose_name_plural = verbose_name
+        constraints = [
+            models.UniqueConstraint(
+                fields=["job", "node_type", "normalized_name"],
+                condition=Q(parent__isnull=True),
+                name="uniq_root_capability_name",
+            ),
+            models.UniqueConstraint(
+                fields=["job", "parent", "node_type", "normalized_name"],
+                condition=Q(parent__isnull=False),
+                name="uniq_child_capability_name",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["job", "parent"], name="cap_node_job_parent_idx"),
+            models.Index(fields=["job", "node_type"], name="cap_node_job_type_idx"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.normalized_name = normalise_node_name(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_node_type_display()}：{self.name}"
+
+
+class AnalysisBatch(models.Model):
+    """某岗位基于一次采集结果执行的一次 AI 能力分析。"""
+
+    STATUS_CHOICES = [
+        ("pending", "等待分析"),
+        ("processing", "分析中"),
+        ("completed", "分析完成"),
+        ("failed", "分析失败"),
+    ]
+
+    job = models.ForeignKey(
+        "chain.Job", on_delete=models.CASCADE,
+        related_name="analysis_batches", verbose_name="所属岗位",
+    )
+    crawl_task = models.ForeignKey(
+        "crawl.CrawlTask", on_delete=models.SET_NULL,
+        related_name="analysis_batches", null=True, blank=True,
+        verbose_name="来源采集任务",
+    )
+    status = models.CharField(
+        "分析状态", max_length=20, choices=STATUS_CHOICES,
+        default="pending", db_index=True,
+    )
+    input_listing_count = models.PositiveIntegerField("输入招聘数据数量", default=0)
+    model_name = models.CharField("使用的大模型", max_length=100, blank=True)
+    raw_ai_output = models.TextField("AI 原始输出", blank=True)
+    error_message = models.TextField("错误信息", blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    started_at = models.DateTimeField("开始时间", null=True, blank=True)
+    finished_at = models.DateTimeField("完成时间", null=True, blank=True)
+
+    class Meta:
+        db_table = "analysis_batch"
+        ordering = ["-created_at"]
+        verbose_name = "AI 分析批次"
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f"{self.job.name} - 分析批次 #{self.pk or '未保存'}"
+
+
+class AnalysisNode(models.Model):
+    """AI 分析产生的候选节点；匹配正式节点后显示为实体，否则显示为虚体。"""
+
+    NODE_TYPES = CapabilityNode.NODE_TYPES
+    DECISION_CHOICES = [
+        ("not_required", "已存在，无需处理"),
+        ("pending", "等待处理"),
+        ("adopted", "已引用"),
+        ("rejected", "已拒纳"),
+    ]
+
+    batch = models.ForeignKey(
+        AnalysisBatch, on_delete=models.CASCADE,
+        related_name="nodes", verbose_name="所属分析批次",
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, related_name="children",
+        null=True, blank=True, verbose_name="父分析节点",
+    )
+    node_type = models.CharField("节点类型", max_length=20, choices=NODE_TYPES)
+    name = models.CharField("节点名称", max_length=200)
+    normalized_name = models.CharField("标准化名称", max_length=200, editable=False)
+    matched_node = models.ForeignKey(
+        CapabilityNode, on_delete=models.SET_NULL,
+        related_name="analysis_matches", null=True, blank=True,
+        verbose_name="匹配的正式能力节点",
+    )
+    college = models.ForeignKey(
+        "organizations.College", on_delete=models.SET_NULL,
+        related_name="analysis_nodes", null=True, blank=True,
+        verbose_name="建议所属学院",
+    )
+    decision_status = models.CharField(
+        "处理状态", max_length=20, choices=DECISION_CHOICES,
+        default="pending", db_index=True,
+    )
+    decision_note = models.TextField("处理说明", blank=True)
+    evidence_json = models.JSONField("分析证据", default=list, blank=True)
+    sort_order = models.PositiveIntegerField("同级排序", default=0)
+    decided_at = models.DateTimeField("处理时间", null=True, blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        db_table = "analysis_node"
+        ordering = ["sort_order", "id"]
+        verbose_name = "AI 分析节点"
+        verbose_name_plural = verbose_name
+        indexes = [
+            models.Index(fields=["batch", "parent"], name="ana_node_batch_parent_idx"),
+            models.Index(fields=["batch", "decision_status"], name="ana_node_batch_state_idx"),
+        ]
+
+    @property
+    def is_virtual(self):
+        return self.matched_node_id is None
+
+    def save(self, *args, **kwargs):
+        self.normalized_name = normalise_node_name(self.name)
+        if self.matched_node_id and self.decision_status == "pending":
+            self.decision_status = "not_required"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_node_type_display()}：{self.name}"
