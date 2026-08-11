@@ -7,39 +7,17 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from apps.industry.models import Job, Chain
 from apps.collection.models import CrawlTask
-from .models import AbilityMap, AnalysisBatch, AnalysisNode, CapabilityNode, parse_abilities_to_tree
+from apps.collection.services import MIN_VALID_LISTINGS, data_quality, valid_requirements
+from .models import AbilityMap, CapabilityNode, parse_abilities_to_tree
 from .services import (
-    adopt_analysis_node,
-    create_analysis_batch,
     create_official_node,
     merge_official_tree,
     normalise_legacy_tree,
-    reject_analysis_node,
     resolve_node_by_legacy_path,
     serialize_official_tree,
-    serialize_analysis_tree,
     set_job_tree_enabled,
     set_node_enabled,
 )
-
-MIN_VALID_LISTINGS = 10
-
-
-def _valid_requirements(task):
-    """只保留包含有效任职要求的招聘记录，作为能力图谱分析依据。"""
-    from apps.collection.models import JobListing
-    reqs = list(JobListing.objects.filter(task=task).values_list("requirements", flat=True))
-    return [str(r).strip() for r in reqs if r and len(str(r).strip()) > 10]
-
-
-def _data_quality(count: int) -> tuple[str, str]:
-    if count == 0:
-        return "no_data", "暂无有效招聘数据，暂不生成能力图谱"
-    if count < MIN_VALID_LISTINGS:
-        return "insufficient", f"有效招聘数据仅 {count} 条，少于 {MIN_VALID_LISTINGS} 条，暂不生成能力图谱"
-    if count >= 30:
-        return "sufficient", f"有效招聘数据 {count} 条，数据较充分"
-    return "ready", f"有效招聘数据 {count} 条，可以生成能力图谱"
 
 
 def _run_ability_gen(job_id: int):
@@ -51,9 +29,9 @@ def _run_ability_gen(job_id: int):
             raise RuntimeError("请先完成招聘数据采集")
 
         # 先筛选有效招聘要求，避免让 AI 基于过少数据生成图谱
-        reqs = _valid_requirements(task)
+        reqs = valid_requirements(task)
         if len(reqs) < MIN_VALID_LISTINGS:
-            quality, message = _data_quality(len(reqs))
+            quality, message = data_quality(len(reqs))
             raise RuntimeError(message)
 
         from ai.services import generate_capability_map
@@ -92,38 +70,6 @@ def _run_ability_gen(job_id: int):
         )
 
 
-def _run_candidate_analysis(batch_id: int):
-    """后台把最新采集数据转换为候选树，不直接修改正式能力图谱。"""
-    batch = AnalysisBatch.objects.select_related("job", "crawl_task").get(id=batch_id)
-    try:
-        task = batch.crawl_task
-        if task is None or task.status != "completed":
-            raise RuntimeError("请先完成招聘数据采集")
-        requirements = _valid_requirements(task)
-        if len(requirements) < MIN_VALID_LISTINGS:
-            raise RuntimeError(_data_quality(len(requirements))[1])
-        from ai.services import generate_capability_map
-        result = generate_capability_map(batch.job.name, requirements)
-        if not result or not result.get("abilities_text"):
-            raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
-        tree = parse_abilities_to_tree(result["abilities_text"])
-        if not tree:
-            raise RuntimeError("AI返回内容无法解析为有效能力图谱")
-        create_analysis_batch(
-            batch.job,
-            tree,
-            crawl_task=task,
-            raw_ai_output=result["abilities_text"],
-            model_name="deepseek-chat",
-            batch=batch,
-        )
-    except Exception as exc:
-        batch.status = "failed"
-        batch.error_message = str(exc)
-        batch.finished_at = timezone.now()
-        batch.save(update_fields=["status", "error_message", "finished_at"])
-
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_ability_generate(request):
@@ -137,8 +83,8 @@ def api_ability_generate(request):
         task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
         if not task:
             return JsonResponse({"error": "请先爬取招聘数据"}, status=400)
-        valid_count = len(_valid_requirements(task))
-        quality, message = _data_quality(valid_count)
+        valid_count = len(valid_requirements(task))
+        quality, message = data_quality(valid_count)
         if valid_count < MIN_VALID_LISTINGS:
             return JsonResponse({
                 "error": message,
@@ -176,22 +122,22 @@ def api_ability_tree(request, job_id):
         from apps.collection.models import CrawlTask
         crawl_task = CrawlTask.objects.filter(job_id=job_id, status="completed").order_by("-created_at").first()
         crawl_status = "completed" if crawl_task else "not_started"
-        data_count = len(_valid_requirements(crawl_task)) if crawl_task else 0
-        data_quality, data_message = _data_quality(data_count)
+        data_count = len(valid_requirements(crawl_task)) if crawl_task else 0
+        quality_status, data_message = data_quality(data_count)
 
         has_nodes = CapabilityNode.objects.filter(job_id=job_id).exists()
         if not am and not has_nodes:
             return JsonResponse({"abilities": [], "status": "not_generated", "crawl_status": crawl_status,
-                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "data_count": data_count, "data_status": quality_status, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
 
         if am and am.generation_status == "processing":
             return JsonResponse({"abilities": [], "status": "processing", "error": "能力图谱正在生成", "crawl_status": crawl_status,
-                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "data_count": data_count, "data_status": quality_status, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
         if am and am.generation_status == "error":
             return JsonResponse({"abilities": [], "status": "error", "error": am.generation_error or "能力图谱生成失败", "crawl_status": crawl_status,
-                                 "data_count": data_count, "data_status": data_quality, "data_message": data_message,
+                                 "data_count": data_count, "data_status": quality_status, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
 
         job = Job.objects.get(id=job_id)
@@ -213,7 +159,7 @@ def api_ability_tree(request, job_id):
             "reviewed_at": am.reviewed_at.isoformat() if am and am.reviewed_at else None,
             "crawl_status": "completed",
             "data_count": data_count,
-            "data_status": data_quality,
+            "data_status": quality_status,
             "data_message": data_message,
             "required_count": MIN_VALID_LISTINGS,
         })
@@ -353,103 +299,3 @@ def api_ability_text(request, job_id):
         return JsonResponse({"text": am.raw_text})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_analysis_start(request):
-    """基于岗位最新的已完成采集任务启动一批 AI 候选能力分析。"""
-    try:
-        data = json.loads(request.body or "{}")
-        job = Job.objects.get(id=data.get("job_id"))
-        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
-        if task is None:
-            return JsonResponse({"error": "请先完成招聘数据采集"}, status=400)
-        valid_count = len(_valid_requirements(task))
-        if valid_count < MIN_VALID_LISTINGS:
-            quality, message = _data_quality(valid_count)
-            return JsonResponse({
-                "error": message,
-                "data_status": quality,
-                "data_count": valid_count,
-                "required_count": MIN_VALID_LISTINGS,
-            }, status=400)
-        batch = AnalysisBatch.objects.create(
-            job=job,
-            crawl_task=task,
-            status="processing",
-            input_listing_count=valid_count,
-            model_name="deepseek-chat",
-            started_at=timezone.now(),
-        )
-        threading.Thread(target=_run_candidate_analysis, args=(batch.id,), daemon=True).start()
-        return JsonResponse({"batch_id": batch.id, "status": batch.status})
-    except Job.DoesNotExist:
-        return JsonResponse({"error": "岗位不存在"}, status=404)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "无效的 JSON"}, status=400)
-
-
-def api_analysis_tree(request, batch_id):
-    """获取某次 AI 分析的实体/虚体候选树。"""
-    try:
-        batch = AnalysisBatch.objects.select_related("job").get(id=batch_id)
-        return JsonResponse({
-            "batch_id": batch.id,
-            "job_id": batch.job_id,
-            "job_name": batch.job.name,
-            "status": batch.status,
-            "error": batch.error_message,
-            "tree": serialize_analysis_tree(batch) if batch.status == "completed" else [],
-        })
-    except AnalysisBatch.DoesNotExist:
-        return JsonResponse({"error": "分析批次不存在"}, status=404)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_analysis_node_adopt(request, node_id):
-    """引用一个虚体节点；必要时自动补齐其虚体祖先。"""
-    try:
-        node = AnalysisNode.objects.select_related("batch__job", "parent", "matched_node").get(id=node_id)
-        official = adopt_analysis_node(node)
-        return JsonResponse({
-            "node_id": node.id,
-            "matched_node_id": official.id,
-            "decision_status": "adopted",
-            "abilities": serialize_official_tree(node.batch.job),
-        })
-    except AnalysisNode.DoesNotExist:
-        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
-    except ValueError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def api_analysis_node_reject(request, node_id):
-    """拒纳一个虚体节点及其所有候选子节点。"""
-    try:
-        node = AnalysisNode.objects.select_related("matched_node").get(id=node_id)
-        reject_analysis_node(node)
-        return JsonResponse({"node_id": node.id, "decision_status": "rejected"})
-    except AnalysisNode.DoesNotExist:
-        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
-    except ValueError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
-
-
-def api_rejected_analysis_tree(request):
-    """获取某岗位最近分析批次中的未采纳节点树。"""
-    job_id = request.GET.get("job_id")
-    batches = AnalysisBatch.objects.filter(status="completed")
-    if job_id:
-        batches = batches.filter(job_id=job_id)
-    batch = batches.order_by("-created_at").first()
-    if batch is None:
-        return JsonResponse({"batch_id": None, "tree": []})
-    return JsonResponse({
-        "batch_id": batch.id,
-        "job_id": batch.job_id,
-        "tree": serialize_analysis_tree(batch, decision_status="rejected"),
-    })

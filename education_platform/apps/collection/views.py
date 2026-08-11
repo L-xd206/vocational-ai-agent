@@ -5,9 +5,20 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from apps.capabilities.models import parse_abilities_to_tree
+from apps.capabilities.services import serialize_official_tree
 from apps.industry.models import Job
-from .models import CrawlSource, CrawlTask
-from .services import save_crawl_result
+from .models import AnalysisBatch, AnalysisNode, CrawlSource, CrawlTask
+from .services import (
+    MIN_VALID_LISTINGS,
+    adopt_analysis_node,
+    create_analysis_batch,
+    data_quality,
+    reject_analysis_node,
+    save_crawl_result,
+    serialize_analysis_tree,
+    valid_requirements,
+)
 
 def _run_crawl(task_id: int):
     """后台执行爬取"""
@@ -43,6 +54,40 @@ def _run_crawl(task_id: int):
         task.error_message = str(e)
         task.finished_at = timezone.now()
         task.save(update_fields=["status", "error_message", "finished_at"])
+
+
+def _run_candidate_analysis(batch_id: int):
+    """后台把岗位采集数据转换为候选树，不直接修改正式能力图谱。"""
+    batch = AnalysisBatch.objects.select_related("job", "crawl_task").get(id=batch_id)
+    try:
+        task = batch.crawl_task
+        if task is None or task.status != "completed":
+            raise RuntimeError("请先完成招聘数据采集")
+        requirements = valid_requirements(task)
+        if len(requirements) < MIN_VALID_LISTINGS:
+            raise RuntimeError(data_quality(len(requirements))[1])
+
+        from ai.services import generate_capability_map
+
+        result = generate_capability_map(batch.job.name, requirements)
+        if not result or not result.get("abilities_text"):
+            raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
+        tree = parse_abilities_to_tree(result["abilities_text"])
+        if not tree:
+            raise RuntimeError("AI返回内容无法解析为有效能力图谱")
+        create_analysis_batch(
+            batch.job,
+            tree,
+            crawl_task=task,
+            raw_ai_output=result["abilities_text"],
+            model_name="deepseek-chat",
+            batch=batch,
+        )
+    except Exception as exc:
+        batch.status = "failed"
+        batch.error_message = str(exc)
+        batch.finished_at = timezone.now()
+        batch.save(update_fields=["status", "error_message", "finished_at"])
 
 
 @csrf_exempt
@@ -97,3 +142,103 @@ def api_crawl_status(request, task_id):
         })
     except CrawlTask.DoesNotExist:
         return JsonResponse({"error": "任务不存在"}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_start(request):
+    """基于岗位最新的已完成采集任务启动一批 AI 候选能力分析。"""
+    try:
+        data = json.loads(request.body or "{}")
+        job = Job.objects.get(id=data.get("job_id"))
+        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
+        if task is None:
+            return JsonResponse({"error": "请先完成招聘数据采集"}, status=400)
+        valid_count = len(valid_requirements(task))
+        if valid_count < MIN_VALID_LISTINGS:
+            quality, message = data_quality(valid_count)
+            return JsonResponse({
+                "error": message,
+                "data_status": quality,
+                "data_count": valid_count,
+                "required_count": MIN_VALID_LISTINGS,
+            }, status=400)
+        batch = AnalysisBatch.objects.create(
+            job=job,
+            crawl_task=task,
+            status="processing",
+            input_listing_count=valid_count,
+            model_name="deepseek-chat",
+            started_at=timezone.now(),
+        )
+        threading.Thread(target=_run_candidate_analysis, args=(batch.id,), daemon=True).start()
+        return JsonResponse({"batch_id": batch.id, "status": batch.status})
+    except Job.DoesNotExist:
+        return JsonResponse({"error": "岗位不存在"}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "无效的 JSON"}, status=400)
+
+
+def api_analysis_tree(request, batch_id):
+    """获取某次岗位采集 AI 分析的实体/虚体候选树。"""
+    try:
+        batch = AnalysisBatch.objects.select_related("job").get(id=batch_id)
+        return JsonResponse({
+            "batch_id": batch.id,
+            "job_id": batch.job_id,
+            "job_name": batch.job.name,
+            "status": batch.status,
+            "error": batch.error_message,
+            "tree": serialize_analysis_tree(batch) if batch.status == "completed" else [],
+        })
+    except AnalysisBatch.DoesNotExist:
+        return JsonResponse({"error": "分析批次不存在"}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_node_adopt(request, node_id):
+    """引用一个虚体节点；必要时自动补齐其虚体祖先。"""
+    try:
+        node = AnalysisNode.objects.select_related("batch__job", "parent", "matched_node").get(id=node_id)
+        official = adopt_analysis_node(node)
+        return JsonResponse({
+            "node_id": node.id,
+            "matched_node_id": official.id,
+            "decision_status": "adopted",
+            "abilities": serialize_official_tree(node.batch.job),
+        })
+    except AnalysisNode.DoesNotExist:
+        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_analysis_node_reject(request, node_id):
+    """拒纳一个虚体节点及其所有候选子节点。"""
+    try:
+        node = AnalysisNode.objects.select_related("matched_node").get(id=node_id)
+        reject_analysis_node(node)
+        return JsonResponse({"node_id": node.id, "decision_status": "rejected"})
+    except AnalysisNode.DoesNotExist:
+        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+def api_rejected_analysis_tree(request):
+    """获取某岗位最近分析批次中的未采纳节点树。"""
+    job_id = request.GET.get("job_id")
+    batches = AnalysisBatch.objects.filter(status="completed")
+    if job_id:
+        batches = batches.filter(job_id=job_id)
+    batch = batches.order_by("-created_at").first()
+    if batch is None:
+        return JsonResponse({"batch_id": None, "tree": []})
+    return JsonResponse({
+        "batch_id": batch.id,
+        "job_id": batch.job_id,
+        "tree": serialize_analysis_tree(batch, decision_status="rejected"),
+    })
