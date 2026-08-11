@@ -1,20 +1,298 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>角色管理</title>
-<style>/* 使用系统字体 */
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#F7FAFC;padding:0}
-:root{--blue-primary:#3B82F6;--border:#E2E8F0;--text:#1A202C;--hint:#A0AEC0;--radius:8px;--white:#fff}
-.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.page-header h2{font-size:20px;font-weight:700}
-.btn{padding:8px 18px;border:none;border-radius:var(--radius);font-size:13px;cursor:pointer}
-.btn-primary{background:var(--blue-primary);color:white}
-.card{background:white;border-radius:10px;padding:20px;border:1px solid var(--border)}
-table{width:100%;border-collapse:collapse}
-th{background:#F7FAFC;padding:12px 16px;text-align:left;font-size:12px;color:var(--hint);border-bottom:1px solid var(--border)}
-td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)}</style></head>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>角色管理</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --blue-dark:#2563EB; --green:#22C55E; --orange:#F59E0B; --red:#EF4444; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:18px 22px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.42),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .toolbar { display:grid; grid-template-columns:320px auto minmax(40px,1fr) auto; gap:12px; padding:14px; margin-bottom:14px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .field { height:38px; width:100%; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    .btn { height:38px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:800; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .table-card { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:var(--shadow); }
+    .table-wrap { flex:1; overflow-y:auto; min-height:0; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; }
+    thead { background:linear-gradient(180deg,#F8FBFF,#F2F6FB); }
+    th { height:42px; padding:10px 12px; text-align:center; font-size:12px; color:#73829A; font-weight:800; border-bottom:1px solid #E8EEF7; }
+    td { padding:0 12px; border-bottom:1px solid #EEF3F8; font-size:13px; color:#26344D; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr { transition:.14s ease; }
+    tbody tr:hover { background:#F8FBFF; }
+    .tag { display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+    .tag.on { color:#16A34A; background:#F0FDF4; }
+    .tag.lock { color:#D97706; background:#FFF7ED; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; transition:.14s ease; }
+    .text-btn:hover { background:#EFF6FF; }
+    .pagination { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:13px 16px; border-top:1px solid #EEF3F8; color:#7E8DA8; font-size:12px; font-weight:700; }
+    .pages { display:flex; gap:6px; }
+    .page-btn { min-width:30px; height:30px; border:1px solid #DDE8F4; border-radius:9px; background:#fff; color:#5C6C84; cursor:pointer; font-family:inherit; font-weight:800; }
+    .page-btn.active { border-color:#3B82F6; background:#3B82F6; color:#fff; }
+    .modal-mask { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
+    .modal-mask.show { display:flex; }
+    .modal { width:520px; max-width:92vw; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from { opacity:0; transform:translateY(12px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:17px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:20px; }
+    .form-item.full { grid-column:1/-1; }
+    .form-label { display:block; margin-bottom:7px; color:#64748B; font-size:12px; font-weight:800; }
+    textarea.field { height:84px; padding:10px 12px; resize:none; line-height:1.6; }
+    .permission-tree { display:grid; gap:10px; max-height:260px; overflow:auto; padding:14px; border:1px solid #E5EDF7; border-radius:14px; background:linear-gradient(180deg,#FBFDFF,#F6FAFF); }
+    .tree-group { padding:10px 12px; border:1px solid #E8EEF7; border-radius:12px; background:#fff; }
+    .tree-parent { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:#1F2D44; }
+    .tree-children { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 12px; margin-top:10px; padding-left:22px; }
+    .tree-children label { display:inline-flex; align-items:center; gap:6px; color:#5F6F89; font-size:12px; font-weight:700; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    #memberModalBody { display:block; }
+    .member-table-wrap { max-height:360px; overflow-y:auto; border:1px solid #EEF3F8; border-radius:12px; }
+    .member-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .member-table th { padding:10px 12px; background:#F8FBFF; font-size:12px; color:#73829A; font-weight:800; text-align:center; border-bottom:1px solid #E8EEF7; }
+    .member-table td { padding:10px 12px; font-size:13px; color:#26344D; text-align:center; border-bottom:1px solid #EEF3F8; }
+    .member-table tbody tr:last-child td { border-bottom:none; }
+    .member-avatar { width:32px; height:32px; display:grid; place-items:center; border-radius:10px; background:linear-gradient(135deg,#93C5FD,#A5B4FC); color:#fff; font-size:14px; font-weight:800; margin:0 auto; }
+    .toast { position:fixed; top:22px; right:22px; z-index:100; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:800; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateY(0); }
+  </style>
+</head>
 <body>
-<div class="page-header"><h2>角色管理</h2><button class="btn btn-primary" onclick="window.open('/admin/auth/group/add/','_blank')">+ 新增角色</button></div>
-<p style="color:var(--hint);margin-bottom:16px">角色管理通过 Django 后台操作，点击上方按钮进入</p>
-<div class="card">
-<table><thead><tr><th>角色名</th><th>描述</th><th>权限</th></tr></thead>
-<tbody><tr><td>专业负责人</td><td>管理能力图谱</td><td>产业链管理、岗位编辑、爬取数据、生成图谱</td></tr>
-<tr><td>系统管理员</td><td>系统管理</td><td>全部权限</td></tr></tbody></table>
-</div></body></html>
+  {% csrf_token %}
+  <!-- 工具栏 -->
+  <section class="toolbar">
+    <input class="field" id="keywordInput" placeholder="搜索角色名称、说明" oninput="searchRoles()">
+    <button class="btn" onclick="resetFilters()">重置</button>
+    <span></span>
+    <button class="btn btn-primary" onclick="openRoleModal('add')">新增角色</button>
+  </section>
+
+  <!-- 表格 -->
+  <section class="table-card">
+    <div class="table-wrap">
+      <table>
+        <colgroup><col style="width:18%"><col style="width:38%"><col style="width:10%"><col style="width:18%"><col style="width:16%"></colgroup>
+        <thead><tr><th>角色名称</th><th>角色说明</th><th>成员数</th><th>更新时间</th><th>操作</th></tr></thead>
+        <tbody id="roleTableBody"><tr><td colspan="5" style="text-align:center;color:var(--muted);">加载中...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span id="pageInfo">共 0 条记录</span>
+      <div class="pages" id="paginationBtns"></div>
+    </div>
+  </section>
+
+  <!-- 新增/编辑角色弹窗 -->
+  <div class="modal-mask" id="roleModal" onclick="closeModal(event,'roleModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title" id="roleModalTitle">新增角色</div>
+        <button class="modal-close" onclick="hideModal('roleModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-item"><label class="form-label">角色名称</label><input class="field" id="roleNameInput" placeholder="请输入角色名称"></div>
+        <div class="form-item"><label class="form-label">角色说明</label><textarea class="field" id="roleDescInput" placeholder="请输入角色说明"></textarea></div>
+        <div class="form-item full"><label class="form-label">权限范围</label><div class="permission-tree" id="permissionTree"></div></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="hideModal('roleModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveRole()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 成员弹窗 -->
+  <div class="modal-mask" id="memberModal" onclick="closeModal(event,'memberModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-title" id="memberModalTitle">成员列表</div>
+        <button class="modal-close" onclick="hideModal('memberModal')">×</button>
+      </div>
+      <div class="modal-body" id="memberModalBody">
+        <div class="member-table-wrap">
+          <table class="member-table">
+            <thead><tr><th style="width:14%">头像</th><th style="width:18%">姓名</th><th style="width:20%">用户名</th><th style="width:26%">所属部门</th><th style="width:22%">手机号</th></tr></thead>
+            <tbody id="memberTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('memberModal')">关闭</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let roles = [], allPermissions = [], total = 0, currentPage = 1, pageSize = 10;
+    function fitRows() { const w=document.querySelector('.table-wrap'); if(w) document.querySelectorAll('td').forEach(td=>td.style.height=(w.clientHeight/10)+'px'); }
+    let editingRoleId = null;
+
+    // ===== 加载权限树（全局缓存） =====
+    async function loadPermissions() {
+      try {
+        const r = await fetch('/api/permissions');
+        const d = await r.json();
+        if (d.ok) allPermissions = d.modules || [];
+      } catch(e) { console.error(e); }
+    }
+
+    // ===== 加载角色列表 =====
+    async function loadRoles() {
+      const keyword = document.getElementById('keywordInput').value.trim();
+      let url = `/api/roles?page=${currentPage}&page_size=${pageSize}`;
+      if (keyword) url += '&keyword=' + encodeURIComponent(keyword);
+      try {
+        const r = await fetch(url);
+        const d = await r.json();
+        if (d.ok) { roles = d.roles || []; total = d.total || 0; renderTable(); renderPagination(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('roleTableBody');
+      if (!roles.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);">暂无数据</td></tr>'; return; }
+      tbody.innerHTML = roles.map(r => {
+        const builtinTag = r.is_builtin ? ' <span class="tag lock">内置</span>' : '';
+        return `<tr>
+          <td>${escapeHtml(r.name)}${builtinTag}</td>
+          <td>${escapeHtml(r.description||'—')}</td>
+          <td><span style="cursor:pointer;color:var(--blue)" onclick="openMemberModal(${r.id},'${escapeAttr(r.name)}')">${r.member_count} 人</span></td>
+          <td>${escapeHtml(r.updated_at)}</td>
+          <td>
+            <button class="text-btn" onclick="openRoleModal('edit',${r.id})">编辑</button>
+            <button class="text-btn" onclick="openMemberModal(${r.id},'${escapeAttr(r.name)}')">成员</button>
+          </td>
+        </tr>`;
+      }).join('');
+      setTimeout(fitRows, 0);
+    }
+
+    window.addEventListener('resize', fitRows);
+
+    function renderPagination() {
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      document.getElementById('pageInfo').textContent = `共 ${total} 条记录，第 ${currentPage}/${totalPages} 页`;
+      let html = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+      for (let i=1; i<=totalPages; i++) html += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+      html += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
+      document.getElementById('paginationBtns').innerHTML = html;
+    }
+    function goPage(p) { const tp = Math.max(1,Math.ceil(total/pageSize)); if (p<1||p>tp) return; currentPage=p; loadRoles(); }
+    function searchRoles() { currentPage=1; loadRoles(); }
+    function resetFilters() { document.getElementById('keywordInput').value=''; currentPage=1; loadRoles(); }
+
+    // ===== 角色弹窗 =====
+    function openRoleModal(mode, roleId) {
+      if (!allPermissions.length) return showToast('权限数据未加载，请刷新');
+      editingRoleId = mode === 'edit' ? roleId : null;
+      document.getElementById('roleModalTitle').textContent = mode === 'edit' ? '编辑角色' : '新增角色';
+      if (mode === 'edit') {
+        fetch(`/api/roles/${roleId}`).then(r=>r.json()).then(d=>{
+          if (!d.ok) return showToast(d.error);
+          document.getElementById('roleNameInput').value = d.role.name;
+          document.getElementById('roleDescInput').value = d.role.description || '';
+          renderPermissionTree(d.role.permission_ids);
+        });
+      } else {
+        document.getElementById('roleNameInput').value = '';
+        document.getElementById('roleDescInput').value = '';
+        renderPermissionTree([]);
+      }
+      document.getElementById('roleModal').classList.add('show');
+    }
+
+    function renderPermissionTree(checkedIds) {
+      const selected = new Set(checkedIds.map(String));
+      document.getElementById('permissionTree').innerHTML = allPermissions.map((mod, mi) => `
+        <div class="tree-group">
+          <label class="tree-parent">
+            <input type="checkbox" data-tree-parent="${mi}" onchange="toggleGroup(${mi},this.checked)">
+            ${escapeHtml(mod.module)}
+          </label>
+          <div class="tree-children">
+            ${mod.permissions.map(p => `
+              <label>
+                <input type="checkbox" class="perm-check" data-module="${mi}" value="${p.id}" ${selected.has(String(p.id))?'checked':''} onchange="syncParent(${mi})">
+                ${escapeHtml(p.name)}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+      allPermissions.forEach((_, i) => syncParent(i));
+    }
+
+    function toggleGroup(mi, checked) {
+      document.querySelectorAll(`.perm-check[data-module="${mi}"]`).forEach(cb => cb.checked = checked);
+    }
+    function syncParent(mi) {
+      const items = [...document.querySelectorAll(`.perm-check[data-module="${mi}"]`)];
+      const parent = document.querySelector(`[data-tree-parent="${mi}"]`);
+      if (!parent || !items.length) return;
+      parent.checked = items.every(cb => cb.checked);
+      parent.indeterminate = items.some(cb => cb.checked) && !parent.checked;
+    }
+    function getCheckedPermissionIds() {
+      return [...document.querySelectorAll('.perm-check:checked')].map(cb => parseInt(cb.value));
+    }
+
+    async function saveRole() {
+      const name = document.getElementById('roleNameInput').value.trim();
+      const desc = document.getElementById('roleDescInput').value.trim();
+      const permIds = getCheckedPermissionIds();
+      if (!name) return showToast('请输入角色名称');
+      const payload = { name, description: desc, permission_ids: permIds };
+      try {
+        let r;
+        if (editingRoleId) {
+          r = await fetch(`/api/roles/${editingRoleId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        } else {
+          r = await fetch('/api/roles', { method:'POST', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        }
+        const d = await r.json();
+        if (d.ok) { hideModal('roleModal'); loadRoles(); showToast(editingRoleId?'角色已保存':'角色已新增'); }
+        else { showToast(d.error||'操作失败'); }
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 成员弹窗 =====
+    async function openMemberModal(roleId, roleName) {
+      document.getElementById('memberModalTitle').textContent = roleName + ' · 成员列表';
+      try {
+        const r = await fetch(`/api/roles/${roleId}/members`);
+        const d = await r.json();
+        if (d.ok) {
+          document.getElementById('memberTableBody').innerHTML = d.members.map(m => `
+            <tr>
+              <td><div class="member-avatar">${escapeHtml((m.real_name||m.username).charAt(0))}</div></td>
+              <td>${escapeHtml(m.real_name||m.username)}</td>
+              <td>${escapeHtml(m.username)}</td>
+              <td>${escapeHtml(m.dept||'—')}</td>
+              <td>${escapeHtml(m.phone||'—')}</td>
+            </tr>
+          `).join('');
+        } else { showToast(d.error); }
+      } catch(e) { showToast('网络错误'); }
+      document.getElementById('memberModal').classList.add('show');
+    }
+
+    // ===== 工具 =====
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e, id) { if (e.target.id === id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    // ===== 启动 =====
+    loadPermissions().then(() => loadRoles());
+  </script>
+</body>
+</html>
