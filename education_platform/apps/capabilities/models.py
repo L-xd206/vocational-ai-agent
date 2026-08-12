@@ -110,34 +110,67 @@ def _parse_structured_abilities(items):
         if not name or key in seen_abilities:
             continue
         seen_abilities.add(key)
-        skills = item.get("skills", item.get("children", [])) or []
-        children = []
-        seen_skills = set()
-        for skill in skills:
-            if isinstance(skill, dict):
-                skill_name = _clean_name(skill.get("name"))
-                child = {"name": skill_name, "enabled": True}
-                for field in ("evidence", "assessment"):
-                    if skill.get(field):
-                        child[field] = str(skill[field]).strip()
-            else:
-                skill_name = _clean_name(skill)
-                child = {"name": skill_name, "enabled": True}
-            skill_key = skill_name.casefold()
-            if not skill_name or skill_key in seen_skills:
-                continue
-            seen_skills.add(skill_key)
-            children.append(child)
         node = {
             "name": name,
             "college": str(item.get("college") or "未分配学院"),
             "enabled": True,
-            "children": children,
         }
+        units = item.get("units")
+        if isinstance(units, list):
+            node["units"] = _parse_structured_units(units)
+        else:
+            # 兼容旧版 AI 的 ability.skills / ability.children 两层结构，
+            # 后续由 normalise_legacy_tree 自动补出能力单元。
+            node["children"] = _parse_structured_points(
+                item.get("skills", item.get("children", [])) or []
+            )
         if item.get("evidence"):
             node["evidence"] = str(item["evidence"]).strip()
         nodes.append(node)
     return nodes
+
+
+def _parse_structured_units(items):
+    units = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = _clean_name(item.get("name"))
+        key = name.casefold()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        unit = {
+            "name": name,
+            "enabled": True,
+            "children": _parse_structured_points(item.get("children", item.get("skills", [])) or []),
+        }
+        if item.get("evidence"):
+            unit["evidence"] = str(item["evidence"]).strip()
+        units.append(unit)
+    return units
+
+
+def _parse_structured_points(items):
+    points = []
+    seen = set()
+    for item in items:
+        if isinstance(item, dict):
+            name = _clean_name(item.get("name"))
+            point = {"name": name, "enabled": True}
+            for field in ("evidence", "assessment"):
+                if item.get(field):
+                    point[field] = str(item[field]).strip()
+        else:
+            name = _clean_name(item)
+            point = {"name": name, "enabled": True}
+        key = name.casefold()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        points.append(point)
+    return points
 
 
 def normalise_node_name(value):

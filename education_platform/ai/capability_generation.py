@@ -25,11 +25,22 @@ MAX_WORKERS = 3  # AI API 并发数（太大可能限流）
 PROMPT = """你是职业院校专业建设负责人，同时有多年{job_name}岗位的一线培训和技能考评经验。
 你的任务是把企业招聘要求转换成可以直接用于课程设计、实训任务和考核评价的岗位能力图谱。
 
+## 当前正式能力图谱
+下面的 JSON 是系统中已经存在的正式能力图谱，只用于名称复用、语义去重和层级对齐：
+{official_tree_json}
+
+## 正式图谱复用规则
+1. 招聘要求是判断能力是否需要输出的事实依据，不能因为正式图谱中已有某节点就无条件输出它。
+2. 如果招聘要求表达的能力与正式节点语义相同或高度相近，即使措辞不同，也必须复用正式节点的原名称。例如正式节点是“机器人维护”，招聘要求写“机器人维修”时，输出名称仍使用“机器人维护”。
+3. 复用正式节点时，必须同时沿用它在正式图谱中的父子路径，不能把同名节点放到另一个父节点下面。
+4. 正式图谱没有、但招聘要求有明确证据支持的内容，可以作为新节点输出；不要为了贴合正式图谱而丢失招聘数据中的新增能力。
+5. 同一含义只输出一次，不得同时输出正式名称及其同义改写。
+
 ## 生成标准
 1. 只提取招聘要求中有证据支持的内容；没有依据的设备、软件、标准和证书不要补写。
 2. 输出 6~12 个核心能力。每个能力应是一个可独立组织课程或实训项目的工作模块，不要把整份工作流程写成一个能力。
 3. 能力名称使用“对象 + 工作任务”，例如“数控机床操作”“工件装夹与找正”“加工质量检测”，不要使用“综合能力”“相关技能”“熟悉设备”等空泛名称。
-4. 每个能力输出 3~8 个技能点。每个技能点只能描述一个可观察、可考核的动作，不能用“并且、同时、以及”串联多个动作。
+4. 每个能力包含能力单元，每个能力单元输出 3~8 个知识点/技能点。每个点只能描述一个可观察、可考核的动作，不能用“并且、同时、以及”串联多个动作。
 5. 技能点必须尽量包含：操作对象、工具/设备/软件、动作和可验证结果。招聘要求没有给出具体数值时，使用“符合图纸、工艺卡或企业规范”，不要虚构精度数值。
 6. 按真实工作顺序组织：安全与准备 → 图纸/工艺 → 操作/装配/调试 → 检测 → 故障处理 → 维护与现场管理。没有证据的环节可以省略。
 7. 合并同义能力和重复技能；不同设备或工艺只有在招聘要求体现明显差异时才拆开。
@@ -41,12 +52,19 @@ PROMPT = """你是职业院校专业建设负责人，同时有多年{job_name}�
   "abilities": [
     {{
       "name": "能力名称",
+      "college": "正式能力所属学院；新增能力填未分配学院",
       "evidence": "招聘要求中支持该能力的关键词或事实",
-      "skills": [
+      "units": [
         {{
-          "name": "一个可观察的技能点",
-          "evidence": "对应的招聘要求关键词",
-          "assessment": "建议的可验证结果"
+          "name": "能力单元名称",
+          "evidence": "招聘要求中支持该能力单元的关键词或事实",
+          "children": [
+            {{
+              "name": "一个可观察的知识点或技能点",
+              "evidence": "对应的招聘要求关键词",
+              "assessment": "建议的可验证结果"
+            }}
+          ]
         }}
       ]
     }}
@@ -64,7 +82,21 @@ PROMPT = """你是职业院校专业建设负责人，同时有多年{job_name}�
 请生成{job_name}岗位的课程开发级能力图谱。"""
 
 
-def gen_ability(job_name: str, requirements: list[str]) -> dict:
+def build_prompt(job_name: str, requirements_text: str, official_tree=None) -> str:
+    """构造 AI 提示词；正式树为空时仍提供合法的空 JSON 数组。"""
+    official_tree_json = json.dumps(
+        official_tree or [],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return PROMPT.format(
+        job_name=job_name,
+        requirements_text=requirements_text,
+        official_tree_json=official_tree_json,
+    )
+
+
+def gen_ability(job_name: str, requirements: list[str], official_tree=None) -> dict:
     """为单个岗位生成能力图谱"""
     # 去重+截断，凑满数据喂给AI
     seen = set()
@@ -84,7 +116,7 @@ def gen_ability(job_name: str, requirements: list[str]) -> dict:
         f"[{i+1}] {r}" for i, r in enumerate(unique_reqs[:100])
     )[:14000]
 
-    prompt = PROMPT.format(job_name=job_name, requirements_text=combined)
+    prompt = build_prompt(job_name, combined, official_tree)
 
     from ai.client import call_assistant
 
@@ -100,8 +132,16 @@ def gen_ability(job_name: str, requirements: list[str]) -> dict:
             items = payload.get("abilities", []) if isinstance(payload, dict) else payload
             if isinstance(items, list):
                 n_abilities = len(items)
-                n_skills = sum(len(item.get("skills", item.get("children", [])) or [])
-                               for item in items if isinstance(item, dict))
+                n_skills = sum(
+                    len(unit.get("children", []) or [])
+                    for item in items if isinstance(item, dict)
+                    for unit in item.get("units", []) or [] if isinstance(unit, dict)
+                )
+                if not n_skills:
+                    n_skills = sum(
+                        len(item.get("skills", item.get("children", [])) or [])
+                        for item in items if isinstance(item, dict)
+                    )
         except (json.JSONDecodeError, TypeError, AttributeError):
             lines = [l for l in text.split("\n") if "---" in l and len(l) > 20]
             n_abilities = len(lines)

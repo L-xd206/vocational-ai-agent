@@ -6,6 +6,10 @@ def generate_jobs(chain_name: str) -> dict:
     return gen_jobs(chain_name)
 
 
-def generate_capability_map(job_name: str, requirements: list[str]) -> dict:
+def generate_capability_map(
+    job_name: str,
+    requirements: list[str],
+    official_tree: list | None = None,
+) -> dict:
     from ai.capability_generation import gen_ability
-    return gen_ability(job_name, requirements)
+    return gen_ability(job_name, requirements, official_tree=official_tree)

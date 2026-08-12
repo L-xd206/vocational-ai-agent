@@ -69,7 +69,12 @@ def _run_candidate_analysis(batch_id: int):
 
         from ai.services import generate_capability_map
 
-        result = generate_capability_map(batch.job.name, requirements)
+        official_tree = serialize_official_tree(batch.job)
+        result = generate_capability_map(
+            batch.job.name,
+            requirements,
+            official_tree=official_tree,
+        )
         if not result or not result.get("abilities_text"):
             raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
         tree = parse_abilities_to_tree(result["abilities_text"])
