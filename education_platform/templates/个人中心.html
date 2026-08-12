@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人中心</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --blue-dark:#2563EB; --green:#22C55E; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { min-height:100vh; padding:18px 22px 26px; background:linear-gradient(120deg,rgba(219,234,254,.72),rgba(255,255,255,0) 34%),radial-gradient(circle at 85% 10%,rgba(165,180,252,.38),transparent 28%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .profile-hero { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:space-between; padding:22px; margin-bottom:16px; border:1px solid rgba(226,234,246,.95); border-radius:22px; background:linear-gradient(120deg,#DBEAFE 0%,#BFDBFE 30%,#93C5FD 60%,#A5B4FC 100%); color:#1E3A5F; box-shadow:var(--shadow); }
+    .identity { position:relative; z-index:1; display:flex; align-items:center; gap:18px; }
+    .avatar-large { width:88px; height:88px; display:grid; place-items:center; border:3px solid rgba(255,255,255,.55); border-radius:26px; background:rgba(255,255,255,.36); color:#2563EB; font-size:34px; font-weight:800; cursor:pointer; transition:.18s ease; }
+    .avatar-large img { width:100%; height:100%; object-fit:cover; border-radius:22px; }
+    .avatar-large:hover { transform:translateY(-2px); background:rgba(255,255,255,.52); }
+    .hero-actions { position:relative; z-index:1; display:flex; gap:10px; }
+    h1 { font-size:25px; font-weight:800; letter-spacing:.8px; }
+    .role-line { margin-top:8px; display:flex; align-items:center; gap:8px; color:rgba(30,58,95,.78); font-size:13px; font-weight:700; }
+    .status-dot { width:8px; height:8px; border-radius:50%; background:#22C55E; box-shadow:0 0 0 4px rgba(34,197,94,.16); }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid rgba(255,255,255,.58); border-radius:12px; background:rgba(255,255,255,.52); color:#1E3A5F; font-size:13px; font-weight:800; font-family:inherit; cursor:pointer; transition:.18s ease; }
+    .btn:hover { transform:translateY(-1px); background:rgba(255,255,255,.72); }
+    .btn-primary { border-color:rgba(37,99,235,.18); background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .layout { display:grid; grid-template-columns:1fr; gap:16px; }
+    .card { border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.94); box-shadow:var(--shadow); }
+    .card-head { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid #EEF3F8; }
+    .card-title { font-size:15px; font-weight:800; color:#1F2D44; }
+    .card-sub { font-size:12px; color:#8A98AF; font-weight:700; }
+    .info-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:16px 18px 18px; }
+    .info-item { display:grid; gap:7px; min-height:76px; padding:14px; border:1px solid #E7EEF8; border-radius:14px; background:linear-gradient(180deg,#fff,#FBFDFF); font-size:13px; }
+    .info-label { color:#7E8DA8; font-weight:700; }
+    .info-value { color:#26344D; font-weight:800; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:18px; }
+    .form-item.full { grid-column:1/-1; }
+    .form-label { display:block; margin-bottom:7px; font-size:12px; font-weight:800; color:#64748B; }
+    .field { width:100%; height:40px; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; font-weight:600; outline:none; transition:.16s ease; }
+    textarea.field { height:90px; padding:11px 12px; resize:none; line-height:1.6; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    .field[readonly] { background:#F4F7FB; color:#6B7A91; cursor:not-allowed; }
+    .security-list { padding:8px 18px 18px; }
+    .security-item { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid #EEF3F8; }
+    .security-item:last-child { border-bottom:none; }
+    .security-name { font-size:13px; font-weight:800; color:#26344D; }
+    .security-desc { margin-top:3px; font-size:12px; color:#8A98AF; }
+    .text-btn { border:none; border-radius:9px; padding:7px 11px; background:#EFF6FF; color:#2563EB; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; }
+    .modal-mask { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
+    .modal-mask.show { display:flex; }
+    .modal { width:420px; max-width:92vw; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:17px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { padding:20px; color:#53637C; font-size:13px; line-height:1.7; }
+    .modal-form { display:grid; gap:13px; }
+    .code-row { display:grid; grid-template-columns:minmax(0,1fr) 112px; gap:10px; align-items:center; }
+    .code-btn { height:40px; border:1px solid #BFDBFE; border-radius:11px; background:#EFF6FF; color:#2563EB; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; }
+    .code-btn:hover { border-color:#93C5FD; background:#DBEAFE; }
+    .upload-box { display:grid; gap:14px; place-items:center; padding:18px; border:1px dashed #B8C8DF; border-radius:16px; background:#F8FBFF; text-align:center; }
+    .upload-preview { width:86px; height:86px; display:grid; place-items:center; overflow:hidden; border-radius:24px; background:linear-gradient(135deg,#DBEAFE,#EEF2FF); color:#2563EB; font-size:30px; font-weight:800; }
+    .upload-preview img { width:100%; height:100%; object-fit:cover; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    .toast { position:fixed; top:22px; right:22px; z-index:100; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:800; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateY(0); }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <!-- 头部身份卡 -->
+  <section class="profile-hero">
+    <div class="identity">
+      <div class="avatar-large" id="avatarLarge" onclick="openAvatarModal()">管</div>
+      <div>
+        <h1 id="heroName">管理员</h1>
+        <div class="role-line"><span class="status-dot"></span> <span id="heroRole">超级管理员</span></div>
+      </div>
+    </div>
+    <div class="hero-actions"><button class="btn btn-primary" id="editProfileBtn" onclick="toggleEdit()">编辑资料</button></div>
+  </section>
+
+  <!-- 账号信息卡 -->
+  <section class="layout">
+    <section class="card">
+      <div class="card-head"><div><div class="card-title">账号信息</div><div class="card-sub">当前登录身份</div></div></div>
+      <div class="info-list">
+        <div class="info-item"><span class="info-label">账号</span><span class="info-value" id="infoUsername">-</span></div>
+        <div class="info-item"><span class="info-label">最近登录</span><span class="info-value" id="infoLastLogin">-</span></div>
+        <div class="info-item"><span class="info-label">所属角色</span><span class="info-value" id="infoRole">-</span></div>
+        <div class="info-item"><span class="info-label">账号状态</span><span class="info-value" id="infoStatus" style="color:#16A34A">-</span></div>
+      </div>
+    </section>
+
+    <!-- 基础资料卡 -->
+    <section class="card">
+      <div class="card-head"><div><div class="card-title">基础资料</div><div class="card-sub">用于平台展示和通知联系</div></div></div>
+      <div class="form-grid">
+        <div class="form-item"><label class="form-label">姓名</label><input class="field profile-field" id="realName" readonly></div>
+        <div class="form-item"><label class="form-label">所属部门</label><input class="field profile-field" id="deptName" readonly></div>
+        <div class="form-item"><label class="form-label">手机号</label><input class="field profile-field" id="profilePhone" readonly></div>
+        <div class="form-item"><label class="form-label">邮箱</label><input class="field profile-field" id="profileEmail" readonly></div>
+        <div class="form-item full"><label class="form-label">个人说明</label><textarea class="field profile-field" id="profileBio" readonly></textarea></div>
+      </div>
+    </section>
+
+    <!-- 安全设置卡 -->
+    <section class="card">
+      <div class="card-head"><div><div class="card-title">安全设置</div><div class="card-sub">保护账号和平台访问安全</div></div></div>
+      <div class="security-list">
+        <div class="security-item">
+          <div><div class="security-name">登录密码</div><div class="security-desc">建议定期更换高强度密码</div></div>
+          <button class="text-btn" onclick="openSecurityModal('password')">修改</button>
+        </div>
+        <div class="security-item">
+          <div><div class="security-name">手机验证</div><div class="security-desc"><span id="securityPhone">-</span></div></div>
+          <button class="text-btn" onclick="openSecurityModal('phone')">换绑</button>
+        </div>
+        <div class="security-item">
+          <div><div class="security-name">登录设备</div><div class="security-desc">当前设备为可信设备</div></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- 头像弹窗 -->
+  <div class="modal-mask" id="avatarModal" onclick="closeModal(event,'avatarModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title">更换头像</div><button class="modal-close" onclick="hideModal('avatarModal')">×</button></div>
+      <div class="modal-body">
+        <div class="upload-box">
+          <div class="upload-preview" id="avatarPreview">管</div>
+          <div><div style="font-weight:800;color:#26344D">从本地选择头像图片</div><div style="margin-top:4px;color:#8A98AF">支持 JPG、PNG、WEBP</div></div>
+          <input class="field" id="avatarFile" type="file" accept="image/*" onchange="previewAvatar(event)">
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('avatarModal')">取消</button><button class="btn btn-primary" onclick="saveAvatar()">保存头像</button></div>
+    </div>
+  </div>
+
+  <!-- 安全弹窗（改密码/换绑手机共用） -->
+  <div class="modal-mask" id="securityModal" onclick="closeModal(event,'securityModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="securityTitle">安全设置</div><button class="modal-close" onclick="hideModal('securityModal')">×</button></div>
+      <div class="modal-body" id="securityContent"></div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('securityModal')">取消</button><button class="btn btn-primary" onclick="confirmSecurity()">确认</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let profile = null, editing = false, pendingAvatar = '', currentSecurityType = '';
+
+    // ===== 加载资料 =====
+    async function loadProfile() {
+      try {
+        const r = await fetch('/api/profile');
+        const d = await r.json();
+        if (d.ok) { profile = d.profile; renderProfile(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderProfile() {
+      if (!profile) return;
+      // 身份卡
+      const initial = (profile.real_name || profile.username).charAt(0);
+      document.getElementById('avatarLarge').innerHTML = profile.avatar ? `<img src="${escapeHtml(profile.avatar)}">` : initial;
+      document.getElementById('heroName').textContent = profile.real_name || profile.username;
+      document.getElementById('heroRole').textContent = profile.role ? profile.role.name : '未分配角色';
+      // 账号信息
+      document.getElementById('infoUsername').textContent = profile.username;
+      document.getElementById('infoLastLogin').textContent = profile.last_login || '—';
+      document.getElementById('infoRole').textContent = profile.role ? profile.role.name : '—';
+      document.getElementById('infoStatus').textContent = profile.is_active ? '启用' : '停用';
+      document.getElementById('infoStatus').style.color = profile.is_active ? '#16A34A' : '#DC2626';
+      // 基础资料
+      document.getElementById('realName').value = profile.real_name || '';
+      document.getElementById('deptName').value = profile.dept || '';
+      document.getElementById('profilePhone').value = profile.phone || '';
+      document.getElementById('profileEmail').value = profile.email || '';
+      document.getElementById('profileBio').value = profile.bio || '';
+      // 安全
+      document.getElementById('securityPhone').textContent = profile.phone ? ('已绑定 ' + profile.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')) : '未绑定';
+    }
+
+    // ===== 编辑资料 =====
+    function toggleEdit() {
+      editing = !editing;
+      const fields = document.querySelectorAll('.profile-field');
+      fields.forEach(f => f.readOnly = !editing);
+      document.getElementById('editProfileBtn').textContent = editing ? '保存资料' : '编辑资料';
+      if (!editing) saveProfile();
+    }
+
+    async function saveProfile() {
+      const payload = {
+        real_name: document.getElementById('realName').value.trim(),
+        dept: document.getElementById('deptName').value.trim(),
+        phone: document.getElementById('profilePhone').value.trim(),
+        email: document.getElementById('profileEmail').value.trim(),
+        bio: document.getElementById('profileBio').value.trim(),
+      };
+      try {
+        const r = await fetch('/api/profile', { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        const d = await r.json();
+        if (d.ok) { profile = d.profile; renderProfile(); document.getElementById('editProfileBtn').textContent = '编辑资料'; showToast('个人资料已保存'); }
+        else { showToast(d.error || '保存失败'); }
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 头像 =====
+    function openAvatarModal() {
+      pendingAvatar = ''; document.getElementById('avatarFile').value = '';
+      document.getElementById('avatarPreview').innerHTML = profile?.avatar ? `<img src="${escapeHtml(profile.avatar)}">` : (profile?.real_name||'?').charAt(0);
+      document.getElementById('avatarModal').classList.add('show');
+    }
+    function previewAvatar(e) {
+      const file = e.target.files?.[0]; if (!file || !file.type.startsWith('image/')) return showToast('请选择图片文件');
+      const reader = new FileReader();
+      reader.onload = ev => { pendingAvatar = ev.target.result; document.getElementById('avatarPreview').innerHTML = `<img src="${pendingAvatar}">`; };
+      reader.readAsDataURL(file);
+    }
+    async function saveAvatar() {
+      if (!pendingAvatar) return showToast('请先选择头像图片');
+      try {
+        const r = await fetch('/api/profile/avatar', { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify({avatar:pendingAvatar}) });
+        const d = await r.json();
+        if (d.ok) { document.getElementById('avatarLarge').innerHTML = `<img src="${escapeHtml(pendingAvatar)}">`; hideModal('avatarModal'); showToast('头像已更换'); }
+        else { showToast(d.error || '保存失败'); }
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 安全弹窗 =====
+    function openSecurityModal(type) {
+      currentSecurityType = type;
+      document.getElementById('securityTitle').textContent = type === 'password' ? '修改登录密码' : '手机号换绑';
+      document.getElementById('securityContent').innerHTML = type === 'password' ? `
+        <div class="modal-form">
+          <div><label class="form-label">当前密码</label><input class="field" id="oldPassword" type="password" placeholder="请输入当前登录密码"></div>
+          <div><label class="form-label">新密码</label><input class="field" id="newPassword" type="password" placeholder="8-20 位，建议包含字母、数字和符号"></div>
+          <div><label class="form-label">确认新密码</label><input class="field" id="confirmPassword" type="password" placeholder="请再次输入新密码"></div>
+          <div><label class="form-label">短信验证码</label>
+            <div class="code-row"><input class="field" id="passwordCode" placeholder="请输入验证码"><button class="code-btn" onclick="showToast('验证码已发送');document.getElementById('passwordCode').value='123456'">获取验证码</button></div>
+          </div>
+        </div>
+      ` : `
+        <div class="modal-form">
+          <div><label class="form-label">当前绑定手机号</label><input class="field" value="${(profile?.phone||'').replace(/(\d{3})\d{4}(\d{4})/,'$1****$2')||'未绑定'}" readonly></div>
+          <div><label class="form-label">当前手机号验证码</label>
+            <div class="code-row"><input class="field" id="oldPhoneCode" placeholder="请输入原手机号验证码"><button class="code-btn" onclick="showToast('验证码已发送');document.getElementById('oldPhoneCode').value='123456'">获取验证码</button></div>
+          </div>
+          <div><label class="form-label">新手机号</label><input class="field" id="newPhone" placeholder="请输入新的手机号"></div>
+          <div><label class="form-label">新手机号验证码</label>
+            <div class="code-row"><input class="field" id="phoneCode" placeholder="请输入新手机号验证码"><button class="code-btn" onclick="showToast('验证码已发送');document.getElementById('phoneCode').value='123456'">获取验证码</button></div>
+          </div>
+        </div>
+      `;
+      document.getElementById('securityModal').classList.add('show');
+    }
+
+    async function confirmSecurity() {
+      if (currentSecurityType === 'password') {
+        const oldPwd = document.getElementById('oldPassword').value;
+        const newPwd = document.getElementById('newPassword').value;
+        const confirmPwd = document.getElementById('confirmPassword').value;
+        const code = document.getElementById('passwordCode').value.trim();
+        if (!oldPwd || !newPwd || !confirmPwd || !code) return showToast('请完整填写');
+        if (newPwd !== confirmPwd) return showToast('两次输入的新密码不一致');
+        try {
+          const r = await fetch('/api/profile/password', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({old_password:oldPwd,new_password:newPwd,code}) });
+          const d = await r.json();
+          if (d.ok) { hideModal('securityModal'); showToast('登录密码已修改'); }
+          else { showToast(d.error); }
+        } catch(e) { showToast('网络错误'); }
+      } else {
+        const oldCode = document.getElementById('oldPhoneCode').value.trim();
+        const newPhone = document.getElementById('newPhone').value.trim();
+        const newCode = document.getElementById('phoneCode').value.trim();
+        if (!oldCode || !newPhone || !newCode) return showToast('请完整填写');
+        try {
+          const r = await fetch('/api/profile/phone', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({code_old:oldCode,new_phone:newPhone,code_new:newCode}) });
+          const d = await r.json();
+          if (d.ok) { profile.phone = newPhone; hideModal('securityModal'); renderProfile(); showToast('手机号已换绑'); }
+          else { showToast(d.error); }
+        } catch(e) { showToast('网络错误'); }
+      }
+    }
+
+    // ===== 工具 =====
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e, id) { if (e.target.id === id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+    loadProfile();
+  </script>
+</body>
+</html>
