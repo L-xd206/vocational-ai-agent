@@ -19,6 +19,9 @@ import urllib.parse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -77,7 +80,13 @@ def _title_similar(a: str, b: str) -> bool:
     return a == b or (len(a) > 3 and len(b) > 3 and (a[:4] == b[:4] or a in b or b in a))
 
 
-def crawl_single_job(job_config: dict, pages: int = PAGES_PER_KW) -> dict:
+def crawl_single_job(
+    job_config: dict,
+    pages: int = PAGES_PER_KW,
+    *,
+    search_url: str = SEARCH_URL,
+    timeout: int = 20,
+) -> dict:
     """
     爬取单个岗位（用所有搜索关键词并行搜索，合并去重）
     这个函数在独立线程中执行
@@ -98,8 +107,8 @@ def crawl_single_job(job_config: dict, pages: int = PAGES_PER_KW) -> dict:
         kw_results = []
         for page in range(1, pages + 1):
             try:
-                req = urllib.request.Request(SEARCH_URL, data=_build_form(kw, page), headers=headers)
-                with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
+                req = urllib.request.Request(search_url, data=_build_form(kw, page), headers=headers)
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
                     html = resp.read().decode("utf-8", errors="replace")
                 page_results = _parse_results(html)
                 if not page_results:
@@ -134,6 +143,153 @@ def crawl_single_job(job_config: dict, pages: int = PAGES_PER_KW) -> dict:
         "total_results": len(all_results),
         "results": all_results,
     }
+
+
+def execute_crawl_task(task_id: int, *, auto_analyze: bool = True):
+    """执行一次采集任务；手动采集和定时采集共用这一入口。"""
+    from .crawlers.registry import get_crawler
+    from .models import CrawlTask
+    from .services import save_crawl_result
+
+    # 原子领取任务，避免两个执行器同时开始同一个任务。
+    with transaction.atomic():
+        task = (
+            CrawlTask.objects.select_for_update()
+            .select_related("job", "source")
+            .get(id=task_id)
+        )
+        if task.status not in {"pending", "failed"}:
+            return task
+        task.status = "running"
+        task.started_at = timezone.now()
+        task.finished_at = None
+        task.error_message = ""
+        task.save(update_fields=["status", "started_at", "finished_at", "error_message"])
+
+    try:
+        if task.source is None:
+            raise RuntimeError("采集任务没有配置采集来源")
+        if not task.source.is_enabled:
+            raise RuntimeError(f"采集来源“{task.source.name}”已停用")
+
+        crawler = get_crawler(task.source)
+        results = crawler.crawl(job=task.job, source=task.source)
+
+        new_count = 0
+        for item in results:
+            _, created = save_crawl_result(task, item)
+            new_count += int(created)
+
+        task.total_results = len(results)
+        task.new_results = new_count
+        task.results_json = results
+        task.status = "completed"
+        task.finished_at = timezone.now()
+        task.save(update_fields=[
+            "total_results", "new_results", "results_json", "status", "finished_at",
+        ])
+    except Exception as exc:
+        task.status = "failed"
+        task.error_message = str(exc)
+        task.finished_at = timezone.now()
+        task.save(update_fields=["status", "error_message", "finished_at"])
+        return task
+
+    if auto_analyze and task.new_results > 0:
+        start_analysis_for_task(task.id)
+    return task
+
+
+def start_analysis_for_task(task_id: int):
+    """为一次已完成采集创建唯一的候选能力分析批次。"""
+    from .models import AnalysisBatch, CrawlTask
+    from .services import (
+        MIN_VALID_LISTINGS,
+        data_quality,
+        valid_requirements,
+    )
+
+    task = CrawlTask.objects.select_related("job").get(id=task_id)
+    requirements = valid_requirements(task)
+    valid_count = len(requirements)
+    skipped = valid_count < MIN_VALID_LISTINGS
+    _, message = data_quality(valid_count)
+    try:
+        with transaction.atomic():
+            batch = AnalysisBatch.objects.create(
+                job=task.job,
+                crawl_task=task,
+                status="skipped" if skipped else "processing",
+                input_listing_count=valid_count,
+                model_name="" if skipped else "deepseek-chat",
+                error_message=message if skipped else "",
+                started_at=timezone.now(),
+                finished_at=timezone.now() if skipped else None,
+            )
+    except IntegrityError:
+        return AnalysisBatch.objects.get(crawl_task=task)
+    if skipped:
+        return batch
+    return execute_analysis_batch(batch.id)
+
+
+def execute_analysis_batch(batch_id: int):
+    """执行一个已经创建的候选能力分析批次。"""
+    from apps.capabilities.models import parse_abilities_to_tree
+    from apps.capabilities.services import serialize_official_tree
+
+    from .models import AnalysisBatch
+    from .services import (
+        MIN_VALID_LISTINGS,
+        create_analysis_batch,
+        data_quality,
+        valid_requirements,
+    )
+
+    batch = AnalysisBatch.objects.select_related("job", "crawl_task").get(id=batch_id)
+    try:
+        task = batch.crawl_task
+        if task is None or task.status != "completed":
+            raise RuntimeError("请先完成招聘数据采集")
+        requirements = valid_requirements(task)
+        valid_count = len(requirements)
+        if valid_count < MIN_VALID_LISTINGS:
+            _, message = data_quality(valid_count)
+            batch.status = "skipped"
+            batch.input_listing_count = valid_count
+            batch.error_message = message
+            batch.finished_at = timezone.now()
+            batch.save(update_fields=[
+                "status", "input_listing_count", "error_message", "finished_at",
+            ])
+            return batch
+
+        from ai.services import generate_capability_map
+
+        result = generate_capability_map(
+            batch.job.name,
+            requirements,
+            official_tree=serialize_official_tree(batch.job),
+        )
+        if not result or not result.get("abilities_text"):
+            raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
+        tree = parse_abilities_to_tree(result["abilities_text"])
+        if not tree:
+            raise RuntimeError("AI返回内容无法解析为有效候选能力树")
+        create_analysis_batch(
+            batch.job,
+            tree,
+            crawl_task=task,
+            raw_ai_output=result["abilities_text"],
+            model_name="deepseek-chat",
+            batch=batch,
+        )
+    except Exception as exc:
+        batch.status = "failed"
+        batch.error_message = str(exc)
+        batch.finished_at = timezone.now()
+        batch.save(update_fields=["status", "error_message", "finished_at"])
+    return batch
 
 
 # ============================================================

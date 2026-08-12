@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.core.validators import MinValueValidator
 
 
@@ -181,6 +182,13 @@ class CrawlTask(models.Model):
         db_table = "crawl_task"
         verbose_name = "采集任务"
         verbose_name_plural = verbose_name
+        constraints = [
+            models.UniqueConstraint(
+                fields=["job", "source"],
+                condition=Q(status__in=["pending", "running"]),
+                name="uniq_active_crawl_task_per_job_source",
+            ),
+        ]
 
     def __str__(self):
         return f"Task #{self.id} - {self.job.name}"
@@ -193,6 +201,7 @@ class AnalysisBatch(models.Model):
         ("pending", "等待分析"),
         ("processing", "分析中"),
         ("completed", "分析完成"),
+        ("skipped", "数据不足，已跳过"),
         ("failed", "分析失败"),
     ]
 
@@ -230,6 +239,13 @@ class AnalysisBatch(models.Model):
         ordering = ["-created_at"]
         verbose_name = "AI 分析批次"
         verbose_name_plural = verbose_name
+        constraints = [
+            models.UniqueConstraint(
+                fields=["crawl_task"],
+                condition=Q(crawl_task__isnull=False),
+                name="uniq_analysis_batch_per_crawl_task",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.job.name} - 分析批次 #{self.pk or '未保存'}"

@@ -1,7 +1,10 @@
 import json
 from unittest.mock import patch
 
+from django.core.management import call_command
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.capabilities.services import merge_official_tree
 from apps.industry.models import Chain, Job
@@ -10,10 +13,14 @@ from apps.organizations.models import College
 from .models import AnalysisBatch, AnalysisNode, CrawlSource, CrawlTask, JobListing
 from .services import (
     adopt_analysis_node,
+    create_crawl_source,
     create_analysis_batch,
+    create_crawl_task,
     reject_analysis_node,
     save_crawl_result,
+    serialize_rejected_tree,
 )
+from .tasks import execute_crawl_task, start_analysis_for_task
 
 
 class ListingDeduplicationTests(TestCase):
@@ -29,8 +36,8 @@ class ListingDeduplicationTests(TestCase):
             code="test_source",
             base_url="https://example.com",
         )
-        first_task = CrawlTask.objects.create(job=job, source=source)
-        second_task = CrawlTask.objects.create(job=job, source=source)
+        first_task = CrawlTask.objects.create(job=job, source=source, status="completed")
+        second_task = CrawlTask.objects.create(job=job, source=source, status="completed")
         item = {
             "title": "采集测试岗位",
             "company": "测试公司",
@@ -46,6 +53,108 @@ class ListingDeduplicationTests(TestCase):
         self.assertFalse(second_created)
         self.assertEqual(JobListing.objects.count(), 1)
         self.assertEqual(listing.task_id, second_task.id)
+
+
+class CrawlSourceAndTaskTests(TestCase):
+    def setUp(self):
+        self.chain = Chain.objects.create(name="任务测试产业链")
+        self.job = Job.objects.create(
+            chain=self.chain,
+            name="任务测试岗位",
+            search_keywords=["任务测试岗位"],
+        )
+        self.source = CrawlSource.objects.get(code="mohrss")
+
+    def test_unregistered_source_code_is_rejected(self):
+        with self.assertRaisesMessage(ValueError, "尚未实现对应采集器"):
+            create_crawl_source({
+                "name": "尚未实现的网站",
+                "code": "not_implemented",
+                "base_url": "https://example.com",
+                "interval_minutes": 1440,
+                "pages": 3,
+            })
+
+    def test_same_job_and_source_reuses_active_task(self):
+        first, first_created = create_crawl_task(
+            job=self.job, source=self.source, trigger_type="manual"
+        )
+        second, second_created = create_crawl_task(
+            job=self.job, source=self.source, trigger_type="scheduled"
+        )
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(first.id, second.id)
+
+    @patch("apps.collection.tasks.start_analysis_for_task")
+    @patch("apps.collection.crawlers.registry.get_crawler")
+    def test_new_results_trigger_analysis(self, crawler_getter, analysis_mock):
+        crawler_getter.return_value.crawl.return_value = [{
+            "title": "任务测试岗位",
+            "company": "测试公司",
+            "requirements": "负责测试设备的运行、维护和故障处理工作。",
+            "source_url": "https://example.com/job/1",
+        }]
+        task, _ = create_crawl_task(
+            job=self.job, source=self.source, trigger_type="manual"
+        )
+        execute_crawl_task(task.id)
+        task.refresh_from_db()
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(task.new_results, 1)
+        analysis_mock.assert_called_once_with(task.id)
+
+    def test_insufficient_data_creates_skipped_analysis(self):
+        task = CrawlTask.objects.create(
+            job=self.job,
+            source=self.source,
+            status="completed",
+        )
+        batch = start_analysis_for_task(task.id)
+        self.assertEqual(batch.status, "skipped")
+        self.assertIn("暂不生成能力图谱", batch.error_message)
+
+    @patch("apps.collection.management.commands.run_due_crawls.execute_crawl_task")
+    def test_due_command_schedules_only_enabled_jobs(self, execute_mock):
+        Job.objects.create(
+            chain=self.chain,
+            name="已禁用岗位",
+            search_keywords=["已禁用岗位"],
+            is_enabled=False,
+        )
+        self.source.is_enabled = True
+        self.source.next_run_at = timezone.now()
+        self.source.save(update_fields=["is_enabled", "next_run_at"])
+
+        call_command("run_due_crawls")
+
+        tasks = CrawlTask.objects.filter(trigger_type="scheduled")
+        self.assertEqual(tasks.count(), 1)
+        self.assertEqual(tasks.get().job_id, self.job.id)
+        execute_mock.assert_called_once()
+
+    def test_latest_trees_returns_enabled_jobs_and_latest_batch(self):
+        user = get_user_model().objects.create_user(username="collection-reader")
+        self.client.force_login(user)
+        older = AnalysisBatch.objects.create(job=self.job, status="failed")
+        latest = AnalysisBatch.objects.create(job=self.job, status="completed")
+        AnalysisNode.objects.create(
+            batch=latest,
+            node_type="ability",
+            name="最新岗位能力",
+            normalized_name="最新岗位能力",
+        )
+
+        response = self.client.get("/api/collection/analysis/latest-trees")
+
+        self.assertEqual(response.status_code, 200)
+        item = next(
+            row for row in response.json()["results"]
+            if row["job"]["id"] == self.job.id
+        )
+        self.assertEqual(item["batch"]["id"], latest.id)
+        self.assertNotEqual(item["batch"]["id"], older.id)
+        self.assertEqual(item["tree"][0]["name"], "最新岗位能力")
 
 
 class CandidateAnalysisServicesTests(TestCase):
@@ -100,6 +209,26 @@ class CandidateAnalysisServicesTests(TestCase):
         self.assertFalse(
             AnalysisNode.objects.filter(batch=batch).exclude(decision_status="rejected").exists()
         )
+
+    def test_rejected_leaf_keeps_ancestor_context(self):
+        batch = create_analysis_batch(self.job, [{
+            "name": "候选岗位能力",
+            "college": self.college.name,
+            "units": [{
+                "name": "候选能力单元",
+                "children": [{"name": "被拒纳知识点"}],
+            }],
+        }])
+        point = batch.nodes.get(node_type="point")
+        reject_analysis_node(point)
+
+        tree = serialize_rejected_tree(batch)
+        self.assertEqual(tree[0]["name"], "候选岗位能力")
+        self.assertTrue(tree[0]["context_only"])
+        self.assertEqual(tree[0]["children"][0]["name"], "候选能力单元")
+        leaf = tree[0]["children"][0]["children"][0]
+        self.assertEqual(leaf["name"], "被拒纳知识点")
+        self.assertFalse(leaf["context_only"])
 
     @patch("ai.services.generate_capability_map")
     def test_candidate_analysis_sends_official_tree_to_ai(self, generate_mock):
