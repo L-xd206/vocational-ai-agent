@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班级管理</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .toolbar-filters { display:flex; align-items:center; gap:10px; flex:1; min-width:0; flex-wrap:wrap; }
+    .toolbar-filters .field { width:auto; min-width:120px; }
+    .toolbar-filters .field.search { flex:1; min-width:200px; max-width:280px; }
+    .toolbar-actions { display:flex; align-items:center; gap:10px; margin-left:auto; flex-shrink:0; }
+    .field { height:34px; width:100%; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    .table-card { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--white); box-shadow:var(--shadow); }
+    .table-wrap { flex:1; overflow-y:auto; min-height:0; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; }
+    thead { background:linear-gradient(180deg,#F8FBFF,#F2F6FB); position:sticky; top:0; z-index:1; }
+    th { height:38px; padding:8px 10px; text-align:center; font-size:12px; color:#73829A; font-weight:800; letter-spacing:.3px; border-bottom:1px solid #E8EEF7; }
+    td { padding:8px 10px; border-bottom:1px solid #EEF3F8; font-size:12px; color:#26344D; vertical-align:middle; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    tbody tr { transition:.14s ease; } tbody tr:hover { background:#F8FBFF; } tbody tr:last-child td { border-bottom:none; }
+    .name-cell { font-weight:800; color:#1F2D44; } .code-cell { color:#64748B; }
+    .status { display:inline-flex; align-items:center; gap:5px; font-weight:800; font-size:12px; }
+    .status::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .status.on { color:#16a34a; } .status.grad { color:#ea580c; }
+    .actions { display:flex; justify-content:center; gap:6px; }
+    .check-cell { width:40px; } .row-check { width:16px; height:16px; cursor:pointer; accent-color:#3B82F6; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; transition:.14s ease; }
+    .text-btn:hover { background:#EFF6FF; } .text-btn.danger { color:#EF4444; } .text-btn.danger:hover { background:#FEF2F2; }
+    .pagination { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-top:1px solid #EEF3F8; color:#7E8DA8; font-size:12px; font-weight:700; }
+    .pages { display:flex; gap:6px; } .page-btn { min-width:30px; height:30px; border:1px solid #DDE8F4; border-radius:9px; background:#fff; color:#5C6C84; cursor:pointer; font-family:inherit; font-weight:800; } .page-btn.active { border-color:#3B82F6; background:#3B82F6; color:#fff; }
+    .modal-mask { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); } .modal-mask.show { display:flex; }
+    .modal { width:560px; max-width:92vw; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:17px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:20px; }
+    .form-item.full { grid-column:1/-1; } .form-label { display:block; margin-bottom:7px; color:#64748B; font-size:12px; font-weight:800; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    .btn-danger { border-color:#ef4444; background:linear-gradient(135deg,#f87171,#ef4444); color:#fff; box-shadow:0 10px 22px rgba(239,68,68,.22); }
+    .toast { position:fixed; right:22px; top:22px; z-index:120; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; } .toast.show { opacity:1; transform:translateY(0); }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="toolbar">
+    <div class="toolbar-filters">
+      <input class="field search" id="keywordInput" placeholder="搜索班级名称、编号、班主任" oninput="searchClasses()">
+      <select class="field" id="majorFilter" onchange="searchClasses()"><option value="">全部专业</option></select>
+      <select class="field" id="gradeFilter" onchange="searchClasses()"><option value="">全部年级</option></select>
+      <select class="field" id="statusFilter" onchange="searchClasses()"><option value="">全部状态</option><option value="active">启用</option><option value="graduated">毕业</option></select>
+      <button class="btn" onclick="resetFilters()">重置</button>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn btn-primary" onclick="graduateSelected()">毕业</button>
+      <button class="btn btn-primary" onclick="openModal()">新增班级</button>
+    </div>
+  </section>
+
+  <section class="table-card">
+    <div class="table-wrap">
+      <table>
+        <colgroup><col style="width:5%"><col style="width:14%"><col style="width:12%"><col style="width:16%"><col style="width:9%"><col style="width:8%"><col style="width:10%"><col style="width:8%"><col style="width:10%"><col style="width:8%"></colgroup>
+        <thead><tr><th class="check-cell"><input class="row-check" type="checkbox" id="checkAll" onchange="toggleCheckAll(this.checked)"></th><th>班级名称</th><th>班级编号</th><th>专业</th><th>年级</th><th>人数</th><th>班主任</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody id="tableBody"><tr><td colspan="10" style="text-align:center;color:var(--muted);">加载中...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination"><span id="pageInfo">共 0 条记录</span><div class="pages" id="paginationBtns"></div></div>
+  </section>
+
+  <!-- 新增/编辑弹窗 -->
+  <div class="modal-mask" id="classModal" onclick="closeModal(event,'classModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="modalTitle">新增班级</div><button class="modal-close" onclick="hideModal('classModal')">×</button></div>
+      <div class="modal-body">
+        <div class="form-item"><label class="form-label">班级名称</label><input class="field" id="formName" placeholder="如：机器人2401班"></div>
+        <div class="form-item"><label class="form-label">班级编号</label><input class="field" id="formCode" placeholder="如：CLS-2024-01"></div>
+        <div class="form-item"><label class="form-label">专业</label><select class="field" id="formMajor"><option value="">请选择专业</option></select></div>
+        <div class="form-item"><label class="form-label">年级</label><select class="field" id="formGrade"><option value="">请选择年级</option></select></div>
+        <div class="form-item"><label class="form-label">班主任</label><input class="field" id="formTeacher" placeholder="请输入班主任姓名"></div>
+        <div class="form-item"><label class="form-label">状态</label><select class="field" id="formStatus"><option value="active">启用</option><option value="graduated">毕业</option></select></div>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('classModal')">取消</button><button class="btn btn-primary" onclick="saveClass()">保存</button></div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div class="modal-mask" id="confirmModal" onclick="closeModal(event,'confirmModal')">
+    <div class="modal" style="width:420px" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title">确认删除</div><button class="modal-close" onclick="hideModal('confirmModal')">×</button></div>
+      <div class="modal-body" style="display:block"><p id="confirmMsg" style="color:#334155;font-size:14px"></p></div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('confirmModal')">取消</button><button class="btn btn-danger" onclick="confirmDelete()">删除</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let classes = [], total = 0, currentPage = 1, pageSize = 10;
+    let editingId = null, selectedIds = new Set(), pendingDeleteId = null;
+    const majorSet = new Set(), gradeSet = new Set();
+    let majorOptions = [];  // 从组织机构加载的专业列表（org_type=专业）
+
+    // 年级下拉：当年-4 ~ 当年+1
+    function buildGradeOptions() {
+      const y = new Date().getFullYear();
+      const grades = [];
+      for (let i = -4; i <= 1; i++) grades.push((y + i) + '级');
+      const html = '<option value="">请选择年级</option>' + grades.map(g => `<option value="${g}">${g}</option>`).join('');
+      document.getElementById('formGrade').innerHTML = html;
+      // 筛选下拉也同步
+      const filter = document.getElementById('gradeFilter'), prev = filter.value;
+      filter.innerHTML = '<option value="">全部年级</option>' + grades.map(g => `<option value="${g}">${g}</option>`).join('');
+      filter.value = prev;
+    }
+
+    async function loadMajors() {
+      try {
+        const r = await fetch('/api/organizations?flat=1'); const d = await r.json();
+        if (d.ok) majorOptions = d.items.filter(o => o.org_type === '专业').map(o => o.name).sort();
+      } catch(e) { console.error(e); }
+    }
+
+    function populateMajorSelect() {
+      const sel = document.getElementById('formMajor'), prev = sel.value;
+      sel.innerHTML = '<option value="">请选择专业</option>' + majorOptions.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+      sel.value = prev;
+    }
+
+    async function loadClasses() {
+      const p = { page:currentPage, page_size:pageSize };
+      const kw = document.getElementById('keywordInput').value.trim();
+      if(kw) p.keyword = kw;
+      ['majorFilter','gradeFilter','statusFilter'].forEach(id => { const v=document.getElementById(id).value; if(v) p[id.replace('Filter','')]=v; });
+      const qs = Object.entries(p).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+      try {
+        const r = await fetch('/api/classes?'+qs); const d = await r.json();
+        if (d.ok) { classes = d.classes; total = d.total; majorSet.clear(); gradeSet.clear(); renderTable(); renderPagination(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      if (!classes.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);">暂无数据</td></tr>'; updateDatalists(); return; }
+      tbody.innerHTML = classes.map(c => {
+        if (c.major) majorSet.add(c.major); if (c.grade) gradeSet.add(c.grade);
+        return `<tr>
+          <td class="check-cell"><input class="row-check" type="checkbox" ${selectedIds.has(c.id)?'checked':''} onchange="toggleRowCheck(${c.id},this.checked)"></td>
+          <td><span class="name-cell">${escapeHtml(c.name)}</span></td><td><span class="code-cell">${escapeHtml(c.code)}</span></td>
+          <td>${escapeHtml(c.major||'-')}</td><td>${escapeHtml(c.grade||'-')}</td><td>${c.student_count}</td>
+          <td>${escapeHtml(c.teacher||'-')}</td>
+          <td><span class="status ${c.status==='active'?'on':'grad'}">${c.status==='active'?'启用':'毕业'}</span></td>
+          <td>${escapeHtml(c.created_at)}</td>
+          <td><div class="actions"><button class="text-btn" onclick="editClass(${c.id})">编辑</button><button class="text-btn danger" onclick="askDelete(${c.id},'${escapeAttr(c.name)}')">删除</button></div></td>
+        </tr>`;
+      }).join('');
+      updateDatalists();
+      updateFilters();
+    }
+
+    function updateFilters() {
+      const sel = document.getElementById('majorFilter'), prev = sel.value;
+      sel.innerHTML = '<option value="">全部专业</option>'+[...majorSet].sort().map(v=>`<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+      sel.value = prev;
+    }
+
+    function renderPagination() {
+      const tp = Math.max(1,Math.ceil(total/pageSize));
+      document.getElementById('pageInfo').textContent = `共 ${total} 条记录，第 ${currentPage}/${tp} 页`;
+      let h = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+      for(let i=1;i<=tp;i++) h += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+      h += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===tp?'disabled':''}>›</button>`;
+      document.getElementById('paginationBtns').innerHTML = h;
+    }
+
+    function goPage(p) { const tp=Math.max(1,Math.ceil(total/pageSize)); if(p<1||p>tp) return; currentPage=p; loadClasses(); }
+    function searchClasses() { currentPage=1; loadClasses(); }
+    function resetFilters() { ['keywordInput','majorFilter','gradeFilter','statusFilter'].forEach(id=>document.getElementById(id).value=''); currentPage=1; loadClasses(); }
+
+    function toggleRowCheck(id, c) { c?selectedIds.add(id):selectedIds.delete(id); }
+    function toggleCheckAll(c) { classes.forEach(cl => c?selectedIds.add(cl.id):selectedIds.delete(cl.id)); renderTable(); }
+
+    async function graduateSelected() {
+      if (!selectedIds.size) return showToast('请先勾选班级');
+      try {
+        const r = await fetch('/api/classes/graduate', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({ids:[...selectedIds]}) });
+        const d = await r.json();
+        if (d.ok) { selectedIds.clear(); loadClasses(); showToast(`已将 ${d.graduated} 个班级设为毕业`); }
+        else showToast(d.error);
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function openModal() {
+      editingId = null;
+      document.getElementById('modalTitle').textContent = '新增班级';
+      populateMajorSelect();
+      ['formName','formCode','formGrade','formTeacher'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('formMajor').value = '';
+      document.getElementById('formStatus').value='active';
+      document.getElementById('formCode').disabled = false;
+      document.getElementById('classModal').classList.add('show');
+    }
+
+    function editClass(id) {
+      const c = classes.find(x=>x.id===id); if(!c) return;
+      editingId = id;
+      document.getElementById('modalTitle').textContent = '编辑班级';
+      populateMajorSelect();
+      document.getElementById('formName').value = c.name;
+      document.getElementById('formCode').value = c.code;
+      document.getElementById('formCode').disabled = true;
+      document.getElementById('formMajor').value = c.major||'';
+      document.getElementById('formGrade').value = c.grade||'';
+      document.getElementById('formTeacher').value = c.teacher||'';
+      document.getElementById('formStatus').value = c.status;
+      document.getElementById('classModal').classList.add('show');
+    }
+
+    async function saveClass() {
+      const name = document.getElementById('formName').value.trim();
+      const code = document.getElementById('formCode').value.trim();
+      const major = document.getElementById('formMajor').value;
+      if (!name || !code) return showToast('请填写班级名称和编号');
+      if (!major) return showToast('请选择专业');
+      const payload = { name, code, major, grade:document.getElementById('formGrade').value.trim(), teacher:document.getElementById('formTeacher').value.trim(), status:document.getElementById('formStatus').value };
+      try {
+        let r;
+        if (editingId) r = await fetch(`/api/classes/${editingId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        else r = await fetch('/api/classes', { method:'POST', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        const d = await r.json();
+        if (d.ok) { hideModal('classModal'); loadClasses(); showToast(editingId?'班级已更新':'班级已新增'); }
+        else showToast(d.error||'操作失败');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function askDelete(id, name) {
+      pendingDeleteId = id;
+      document.getElementById('confirmMsg').textContent = `确定要删除班级「${name}」吗？删除后不可恢复。`;
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    async function confirmDelete() {
+      if (!pendingDeleteId) return;
+      try {
+        const r = await fetch(`/api/classes/${pendingDeleteId}`, { method:'DELETE', headers:jsonHeaders() });
+        const d = await r.json();
+        if (d.ok) { selectedIds.delete(pendingDeleteId); hideModal('confirmModal'); loadClasses(); showToast('已删除'); }
+        else { showToast(d.error||'删除失败'); }
+      } catch(e) { showToast('网络错误'); }
+      pendingDeleteId = null;
+    }
+
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e,id) { if(e.target.id===id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    buildGradeOptions();
+    loadMajors().then(() => loadClasses());
+  </script>
+</body>
+</html>
