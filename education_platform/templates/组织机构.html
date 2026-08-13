@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组织机构</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --blue-soft:#EFF6FF; --green:#22C55E; --green-soft:#F0FDF4; --orange:#F59E0B; --orange-soft:#FFF7ED; --red:#EF4444; --purple:#8B5CF6; --purple-soft:#F5F3FF; --rose:#EC4899; --rose-soft:#FDF2F8; --teal:#06B6D4; --teal-soft:#ECFEFF; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:18px 22px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.42),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .page-title { font-size:20px; font-weight:800; color:#1F2D44; margin-bottom:14px; padding-left:12px; border-left:4px solid #3B82F6; line-height:1.3; }
+    .action-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+    .btn { height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 14px; border:1px solid #dfe7f2; border-radius:12px; background:var(--white); color:#43516a; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .search-box { display:flex; align-items:center; gap:8px; }
+    .search-box input { width:220px; height:32px; padding:0 12px; border:1px solid #DDE8F4; border-radius:10px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; }
+    .search-box input:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    .table-card { flex:1; min-height:0; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:var(--shadow); overflow:hidden; }
+    .table-scroll { flex:1; overflow:auto; }
+    .table-scroll::-webkit-scrollbar { width:6px; height:6px; }
+    .table-scroll::-webkit-scrollbar-thumb { background:#DDE8F4; border-radius:3px; }
+    .org-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .org-table thead th { position:sticky; top:0; z-index:5; background:#F8FAFC; color:#64748B; font-size:12px; font-weight:800; text-align:center; padding:13px 16px; border-bottom:2px solid #E3EBF5; white-space:nowrap; }
+    .org-table tbody tr { border-bottom:1px solid #F1F5F9; transition:background .15s ease; }
+    .org-table tbody tr:hover { background:#F0F7FF; }
+    .org-table td { padding:8px 10px; font-size:12px; color:#26344D; vertical-align:middle; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .name-cell { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+    .indent { display:inline-block; flex-shrink:0; }
+    .row-toggle { width:20px; height:20px; display:grid; place-items:center; border:1px solid #e1e8f2; border-radius:6px; background:#fff; color:#8b99ae; font-size:9px; cursor:pointer; flex-shrink:0; transition:.2s ease; }
+    .row-toggle:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-soft); }
+    .row-toggle.expanded { background:var(--blue-soft); border-color:rgba(59,130,246,.3); color:var(--blue); }
+    .toggle-spacer { width:20px; flex-shrink:0; }
+    .type-badge { width:26px; height:26px; display:grid; place-items:center; border-radius:7px; font-size:12px; font-weight:800; flex-shrink:0; }
+    .name-text { font-size:13px; font-weight:700; color:#27364e; }
+    .type-tag { display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .org-table td.desc-cell { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8d9bb0; font-size:12px; text-align:left; }
+    .actions { display:flex; justify-content:flex-start; gap:4px; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; transition:.14s ease; }
+    .text-btn:hover { background:#EFF6FF; }
+    .text-btn.danger { color:#EF4444; }
+    .text-btn.danger:hover { background:#FEF2F2; }
+    .text-btn.success { color:#16A34A; }
+    .text-btn.success:hover { background:#F0FDF4; }
+    .modal-mask { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
+    .modal-mask.show { display:flex; }
+    .modal { width:520px; max-width:92vw; max-height:86vh; overflow-y:auto; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:17px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:20px; }
+    .form-item.full { grid-column:1/-1; }
+    .form-label { display:block; margin-bottom:7px; color:#64748B; font-size:12px; font-weight:800; }
+    .field { height:38px; width:100%; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    textarea.field { height:76px; padding:10px 12px; resize:none; line-height:1.6; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    .toast { position:fixed; top:22px; right:22px; z-index:100; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:800; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    /* 树形下拉 */
+    .tree-select { position:relative; }
+    .tree-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:200; background:#fff; border:1px solid #DDE8F4; border-radius:11px; box-shadow:0 12px 40px rgba(16,30,54,.18); margin-top:4px; }
+    .tree-dropdown.show { display:block; }
+    .tree-list { max-height:260px; overflow-y:auto; padding:4px 0; }
+    .tree-node { cursor:pointer; user-select:none; }
+    .tree-node .node-label { display:flex; align-items:center; padding:7px 14px; font-size:13px; font-weight:600; color:#334155; transition:background .12s; white-space:nowrap; }
+    .tree-node .node-label:hover { background:#EFF6FF; color:#1e40af; }
+    .tree-node .node-label .arrow { width:16px; font-size:9px; color:#8b99ae; flex-shrink:0; }
+    .tree-node .node-label .node-text { overflow:hidden; text-overflow:ellipsis; }
+    .tree-children { display:none; padding-left:18px; }
+    .tree-node:hover > .tree-children { display:block; }
+    .tree-node .node-label.selected { background:#DBEAFE; color:#1e40af; }
+    .tree-node.hidden { display:none; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <h1 class="page-title">组织机构</h1>
+
+  <section class="action-bar">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="请输入机构名称" onkeydown="if(event.key==='Enter')filterTree()">
+      <button class="btn btn-primary" onclick="filterTree()">搜索</button>
+      <button class="btn" onclick="resetSearch()">重置</button>
+    </div>
+    <button class="btn btn-primary" onclick="openOrgModal()">新增机构</button>
+  </section>
+
+  <section class="table-card">
+    <div class="table-scroll">
+      <table class="org-table">
+        <thead><tr><th>机构名称</th><th>机构类型</th><th>负责人</th><th>机构说明</th><th>操作</th></tr></thead>
+        <tbody id="orgTableBody"><tr><td colspan="5" style="text-align:center;color:var(--muted);">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 新增/编辑弹窗 -->
+  <div class="modal-mask" id="orgModal" onclick="closeModal(event,'orgModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="orgModalTitle">新增机构</div><button class="modal-close" onclick="hideModal('orgModal')">×</button></div>
+      <div class="modal-body">
+        <div class="form-item"><label class="form-label">上级机构</label>
+          <div class="tree-select" id="orgParentWrap">
+            <input class="field" id="orgParentInput" placeholder="点击选择上级机构" autocomplete="off" onclick="toggleTreeSelect()" oninput="filterTreeSelect()">
+            <input type="hidden" id="orgParent">
+            <div class="tree-dropdown" id="treeDropdown">
+              <div class="tree-list" id="treeList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="form-item"><label class="form-label">机构类型</label>
+          <select class="field" id="orgType" onchange="toggleCustomType()">
+          </select>
+          <input class="field" id="orgTypeCustom" placeholder="请输入自定义类型" style="display:none;margin-top:8px">
+        </div>
+        <div class="form-item"><label class="form-label">机构名称</label><input class="field" id="orgName" placeholder="请输入机构名称"></div>
+        <div class="form-item"><label class="form-label">负责人</label><input class="field" id="orgLeader" placeholder="请输入负责人姓名"></div>
+        <div class="form-item full"><label class="form-label">机构说明</label><textarea class="field" id="orgDesc" placeholder="请输入机构说明"></textarea></div>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('orgModal')">取消</button><button class="btn btn-primary" onclick="saveOrg()">保存</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    const palette = ['#3B82F6','#22C55E','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#F97316'];
+    const softPalette = ['#EFF6FF','#F0FDF4','#FFF7ED','#FEF2F2','#F5F3FF','#ECFEFF','#FDF2F8','#FFF7ED'];
+    function typeStyle(name) { let h=0; for(let i=0;i<name.length;i++) h=name.charCodeAt(i)+((h<<5)-h); const i=Math.abs(h)%palette.length; return {bg:softPalette[i],color:palette[i],icon:name.charAt(0),tag:name}; }
+
+    // 树数据：{id → {node, children_ids, expanded}}
+    let tree = {}, rootIds = [], expandedSet = new Set(), searchKeyword = '', editingId = null, allFlat = [];
+
+    // ===== 加载 =====
+    async function loadRoots() {
+      try {
+        const r = await fetch('/api/organizations');
+        const d = await r.json();
+        if (d.ok) { d.items.forEach(n => { tree[n.id] = {node:n, children:null}; }); rootIds = d.items.map(n=>n.id); renderTree(); }
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadChildren(parentId) {
+      try {
+        const r = await fetch(`/api/organizations?parent_id=${parentId}`);
+        const d = await r.json();
+        if (d.ok) { tree[parentId].children = d.items; d.items.forEach(n => { if(!tree[n.id]) tree[n.id]={node:n,children:null}; }); }
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadFlat() {
+      try {
+        const r = await fetch('/api/organizations?flat=1');
+        const d = await r.json();
+        if (d.ok) { allFlat = d.items; rebuildTypeSelect(); }
+      } catch(e) { console.error(e); }
+    }
+
+    // ===== 渲染 =====
+    function renderTree() {
+      const tbody = document.getElementById('orgTableBody');
+      let html = '';
+      function renderNode(id, level) {
+        const entry = tree[id]; if (!entry) return;
+        const n = entry.node;
+        const style = typeStyle(n.org_type);
+        const hasChildren = n.has_children;
+        const expanded = expandedSet.has(id);
+
+        // 搜索过滤
+        if (searchKeyword && !n.name.toLowerCase().includes(searchKeyword)) {
+          // 不显示但子节点可能匹配，继续递归
+          if (hasChildren && entry.children && expanded) {
+            entry.children.forEach(c => renderNode(c.id, level));
+          }
+          return;
+        }
+
+        const arrow = hasChildren
+          ? `<button class="row-toggle ${expanded?'expanded':''}" onclick="toggleNode(${id})">${expanded?'&#9660;':'&#9654;'}</button>`
+          : '<span class="toggle-spacer"></span>';
+
+        html += `<tr>
+          <td><div class="name-cell"><span class="indent" style="width:${level*22}px"></span>${arrow}<span class="type-badge" style="background:${style.bg};color:${style.color}">${style.icon}</span><span class="name-text">${escapeHtml(n.name)}</span></div></td>
+          <td><span class="type-tag" style="background:${style.bg};color:${style.color}">${style.tag}</span></td>
+          <td>${escapeHtml(n.leader||'-')}</td>
+          <td class="desc-cell">${escapeHtml(n.description||'-')}</td>
+          <td>
+            <div class="actions">
+              <button class="text-btn" onclick="openOrgEdit(${id})">编辑</button>
+              <button class="text-btn danger" onclick="deleteOrgFromRow(${id})">删除</button>
+              ${(hasChildren || !n.parent_id) ? `<button class="text-btn success" onclick="openOrgModalForParent(${id})">新增</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+
+        if (hasChildren && expanded && entry.children) {
+          entry.children.forEach(c => renderNode(c.id, level + 1));
+        }
+      }
+      rootIds.forEach(id => renderNode(id, 0));
+      tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">暂无数据</td></tr>';
+    }
+
+    async function toggleNode(id) {
+      if (expandedSet.has(id)) { expandedSet.delete(id); }
+      else {
+        if (!tree[id].children) await loadChildren(id);
+        expandedSet.add(id);
+      }
+      renderTree();
+    }
+
+    function filterTree() {
+      searchKeyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (searchKeyword) {
+        // 搜索时展开所有节点
+        async function expandAll() {
+          for (const id of Object.keys(tree)) {
+            if (tree[id].node.has_children && !tree[id].children) await loadChildren(id);
+            expandedSet.add(parseInt(id));
+          }
+          renderTree();
+        }
+        expandAll();
+      } else { renderTree(); }
+    }
+
+    function resetSearch() { document.getElementById('searchInput').value=''; searchKeyword=''; expandedSet.clear(); renderTree(); }
+
+    // ===== 自定义机构类型 =====
+    function toggleCustomType() {
+      const sel = document.getElementById('orgType');
+      const custom = document.getElementById('orgTypeCustom');
+      if (sel.value === '__other__') { custom.style.display=''; custom.focus(); }
+      else { custom.style.display='none'; custom.value=''; }
+    }
+    let knownTypes = [];
+    function rebuildTypeSelect() {
+      const types = [...new Set(allFlat.map(n => n.org_type).filter(Boolean))].sort();
+      knownTypes = types;
+      const sel = document.getElementById('orgType');
+      sel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
+        + '<option value="__other__">其他（自定义）</option>';
+    }
+    function getOrgTypeValue() {
+      const sel = document.getElementById('orgType');
+      const custom = document.getElementById('orgTypeCustom').value.trim();
+      return sel.value === '__other__' ? custom : sel.value;
+    }
+    function setOrgTypeValue(val) {
+      const sel = document.getElementById('orgType');
+      if (!val) { sel.value = ''; document.getElementById('orgTypeCustom').style.display='none'; }
+      else if (knownTypes.includes(val)) { sel.value = val; document.getElementById('orgTypeCustom').style.display='none'; }
+      else { sel.value = '__other__'; document.getElementById('orgTypeCustom').style.display=''; document.getElementById('orgTypeCustom').value = val; }
+    }
+
+    // ===== 树形下拉 =====
+    let treeRoots = [];
+    let selectedParentId = null;
+
+    function buildTreeData() {
+      const map = {}; treeRoots = [];
+      allFlat.forEach(n => { map[n.id] = {...n, children:[]}; });
+      allFlat.forEach(n => {
+        if (n.parent_id && map[n.parent_id]) map[n.parent_id].children.push(map[n.id]);
+        else if (!n.parent_id) treeRoots.push(map[n.id]);
+      });
+    }
+
+    function renderTreeNodes(nodes) {
+      return nodes.map(n => `
+        <div class="tree-node" data-id="${n.id}" data-name="${escapeAttr(n.name)}">
+          <div class="node-label" onclick="selectTreeNode(${n.id},'${escapeAttr(n.name)}')">
+            <span class="arrow">${n.children.length?'&#9654;':''}</span>
+            <span class="node-text">${escapeHtml(n.name)}</span>
+          </div>
+          ${n.children.length ? `<div class="tree-children">${renderTreeNodes(n.children)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function refreshTree() {
+      buildTreeData();
+      document.getElementById('treeList').innerHTML = renderTreeNodes(treeRoots);
+    }
+
+    function toggleTreeSelect() {
+      const dd = document.getElementById('treeDropdown');
+      if (dd.classList.contains('show')) { dd.classList.remove('show'); return; }
+      if (!allFlat.length) loadFlat().then(() => { refreshTree(); document.getElementById('treeDropdown').classList.add('show'); });
+      else { refreshTree(); dd.classList.add('show'); }
+    }
+
+    function selectTreeNode(id, name) {
+      selectedParentId = id;
+      document.getElementById('orgParentInput').value = name;
+      document.getElementById('orgParent').value = id;
+      document.getElementById('treeDropdown').classList.remove('show');
+      document.querySelectorAll('#treeList .tree-node').forEach(n => n.classList.remove('hidden'));
+    }
+
+    function filterTreeSelect() {
+      const kw = document.getElementById('orgParentInput').value.trim().toLowerCase();
+      if (!kw) { document.getElementById('treeDropdown').classList.remove('show'); return; }
+      document.getElementById('treeDropdown').classList.add('show');
+      document.querySelectorAll('#treeList .tree-node').forEach(n => {
+        const match = n.dataset.name.toLowerCase().includes(kw);
+        n.classList.toggle('hidden', !match);
+        if (match) {
+          let p = n.parentElement;
+          while (p && p.classList.contains('tree-children')) {
+            p.style.display = 'block';
+            p = p.parentElement?.parentElement;
+          }
+        }
+      });
+    }
+
+    // 点击外部关闭
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#orgParentWrap')) document.getElementById('treeDropdown').classList.remove('show');
+    });
+
+    function setParentValue(id) {
+      selectedParentId = id;
+      if (id) {
+        const n = allFlat.find(o => o.id === id);
+        if (n) { document.getElementById('orgParentInput').value = n.name; document.getElementById('orgParent').value = id; }
+      }
+    }
+
+    async function openOrgModal() {
+      editingId = null;
+      document.getElementById('orgModalTitle').textContent = '新增机构';
+      ['orgName','orgLeader','orgDesc'].forEach(id => document.getElementById(id).value='');
+      document.getElementById('orgParentInput').value = '';
+      document.getElementById('orgParent').value = '';
+      setOrgTypeValue('');
+      if (!allFlat.length) await loadFlat();
+      refreshTree();
+      document.getElementById('orgModal').classList.add('show');
+    }
+
+    async function openOrgModalForParent(parentId) {
+      await openOrgModal();
+      setParentValue(parentId);
+    }
+
+    function openOrgEdit(id) {
+      const entry = tree[id]; if (!entry) return;
+      editingId = id;
+      document.getElementById('orgModalTitle').textContent = '编辑机构';
+      document.getElementById('orgName').value = entry.node.name;
+      setOrgTypeValue(entry.node.org_type);
+      document.getElementById('orgLeader').value = entry.node.leader || '';
+      document.getElementById('orgDesc').value = entry.node.description || '';
+      if (!allFlat.length) { loadFlat().then(() => { refreshTree(); setParentValue(entry.node.parent_id); }); }
+      else { refreshTree(); setParentValue(entry.node.parent_id); }
+      document.getElementById('orgModal').classList.add('show');
+    }
+
+    async function deleteOrgFromRow(id) {
+      const entry = tree[id];
+      const name = entry ? entry.node.name : '此机构';
+      if (!confirm(`确定要删除「${name}」吗？`)) return;
+      try {
+        const r = await fetch(`/api/organizations/${id}`, { method:'DELETE', headers:jsonHeaders() });
+        const d = await r.json();
+        if (d.ok) { expandedSet.clear(); tree={}; rootIds=[]; allFlat=[]; loadFlat(); loadRoots(); showToast('已删除'); }
+        else { showToast(d.error||'删除失败'); }
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 保存 =====
+    async function saveOrg() {
+      const name = document.getElementById('orgName').value.trim();
+      if (!name) return showToast('请输入机构名称');
+      const orgType = getOrgTypeValue();
+      if (!orgType) return showToast('请选择或输入机构类型');
+      const payload = { name, org_type:orgType, parent_id:document.getElementById('orgParent').value||null, leader:document.getElementById('orgLeader').value.trim(), description:document.getElementById('orgDesc').value.trim() };
+      try {
+        let r;
+        if (editingId) {
+          r = await fetch(`/api/organizations/${editingId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        } else {
+          r = await fetch('/api/organizations', { method:'POST', headers:jsonHeaders(), body:JSON.stringify(payload) });
+        }
+        const d = await r.json();
+        if (d.ok) { hideModal('orgModal'); expandedSet.clear(); tree={}; rootIds=[]; allFlat=[]; loadRoots(); showToast(editingId?'机构已保存':'机构已新增'); }
+        else { showToast(d.error||'操作失败'); }
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 工具 =====
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e,id) { if(e.target.id===id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    loadFlat();
+    loadRoots();
+  </script>
+</body>
+</html>

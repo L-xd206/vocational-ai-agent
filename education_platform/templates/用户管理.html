@@ -57,6 +57,17 @@
     .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
     .toast { position:fixed; right:22px; top:22px; z-index:120; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; }
     .toast.show { opacity:1; transform:translateY(0); }
+    .tree-select { position:relative; }
+    .tree-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:200; background:#fff; border:1px solid #DDE8F4; border-radius:11px; box-shadow:0 12px 40px rgba(16,30,54,.18); margin-top:4px; }
+    .tree-dropdown.show { display:block; }
+    .tree-list { max-height:260px; overflow-y:auto; padding:4px 0; }
+    .tree-node { cursor:pointer; user-select:none; }
+    .tree-node .node-label { display:flex; align-items:center; padding:7px 14px; font-size:13px; font-weight:600; color:#334155; transition:background .12s; white-space:nowrap; }
+    .tree-node .node-label:hover { background:#EFF6FF; color:#1e40af; }
+    .tree-node .node-label .arrow { width:16px; font-size:9px; color:#8b99ae; flex-shrink:0; }
+    .tree-children { display:none; padding-left:18px; }
+    .tree-node:hover > .tree-children { display:block; }
+    .tree-node.hidden { display:none; }
   </style>
 </head>
 <body>
@@ -125,7 +136,12 @@
         </div>
         <div class="form-item">
           <label class="form-label">所属部门</label>
-          <input class="field" id="formDept" placeholder="如：智能制造学院">
+          <div class="tree-select" id="deptWrap">
+            <input class="field" id="formDeptInput" placeholder="点击选择所属部门" autocomplete="off" onclick="toggleDeptSelect()" oninput="filterDeptSelect()">
+            <div class="tree-dropdown" id="deptDropdown">
+              <div class="tree-list" id="deptTreeList"></div>
+            </div>
+          </div>
         </div>
         <div class="form-item full">
           <label class="form-label">手机号</label>
@@ -156,7 +172,74 @@
     function fitRows() { const w=document.querySelector('.table-wrap'); if(w) document.querySelectorAll('td').forEach(td=>td.style.height=(w.clientHeight/10)+'px'); }
     let editingUserId = null;
 
-    // ===== 加载角色列表（筛选下拉 + 弹窗下拉共用） =====
+    // ===== 部门树形下拉 =====
+    let orgFlat = [], deptTreeRoots = [];
+
+    async function loadDeptData() {
+      try { const r = await fetch('/api/organizations?flat=1'); const d = await r.json(); if(d.ok) orgFlat = d.items; } catch(e){}
+    }
+
+    function buildDeptTree() {
+      const map = {}; deptTreeRoots = [];
+      orgFlat.forEach(n => { map[n.id] = {...n, children:[]}; });
+      orgFlat.forEach(n => {
+        if (n.parent_id && map[n.parent_id]) map[n.parent_id].children.push(map[n.id]);
+        else if (!n.parent_id) deptTreeRoots.push(map[n.id]);
+      });
+    }
+
+    function renderDeptNodes(nodes) {
+      return nodes.map(n => `
+        <div class="tree-node" data-name="${escapeAttr(n.name)}">
+          <div class="node-label" onclick="selectDeptNode('${escapeAttr(n.name)}')">
+            <span class="arrow">${n.children.length?'&#9654;':''}</span>
+            <span>${escapeHtml(n.name)}</span>
+          </div>
+          ${n.children.length ? `<div class="tree-children">${renderDeptNodes(n.children)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function refreshDeptTree() {
+      buildDeptTree();
+      document.getElementById('deptTreeList').innerHTML = renderDeptNodes(deptTreeRoots);
+    }
+
+    function toggleDeptSelect() {
+      const dd = document.getElementById('deptDropdown');
+      if (dd.classList.contains('show')) { dd.classList.remove('show'); return; }
+      if (!orgFlat.length) { loadDeptData().then(() => { refreshDeptTree(); dd.classList.add('show'); }); }
+      else { refreshDeptTree(); dd.classList.add('show'); }
+    }
+
+    function selectDeptNode(name) {
+      document.getElementById('formDeptInput').value = name;
+      document.getElementById('deptDropdown').classList.remove('show');
+      document.querySelectorAll('#deptTreeList .tree-node').forEach(n => n.classList.remove('hidden'));
+    }
+
+    function filterDeptSelect() {
+      const kw = document.getElementById('formDeptInput').value.trim().toLowerCase();
+      if (!kw) { document.getElementById('deptDropdown').classList.remove('show'); return; }
+      document.getElementById('deptDropdown').classList.add('show');
+      if (!orgFlat.length) { loadDeptData().then(() => { refreshDeptTree(); doFilterDept(kw); }); }
+      else doFilterDept(kw);
+    }
+
+    function doFilterDept(kw) {
+      document.querySelectorAll('#deptTreeList .tree-node').forEach(n => {
+        const match = n.dataset.name.toLowerCase().includes(kw);
+        n.classList.toggle('hidden', !match);
+        if (match) {
+          let p = n.parentElement;
+          while (p && p.classList.contains('tree-children')) { p.style.display='block'; p = p.parentElement?.parentElement; }
+        }
+      });
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#deptWrap')) document.getElementById('deptDropdown').classList.remove('show');
+    });
     async function loadRoles() {
       try {
         const r = await fetch('/api/roles');
@@ -247,11 +330,12 @@
         document.getElementById('formRealName').value = u.real_name || '';
         document.getElementById('formUsername').value = u.username;
         document.getElementById('formRole').value = u.role ? u.role.id : '';
-        document.getElementById('formDept').value = u.dept || '';
+        document.getElementById('formDeptInput').value = u.dept || '';
         document.getElementById('formPhone').value = u.phone || '';
         document.getElementById('formEmail').value = u.email || '';
       } else {
-        ['formRealName','formUsername','formDept','formPhone','formEmail'].forEach(id => document.getElementById(id).value='');
+        ['formRealName','formUsername','formPhone','formEmail'].forEach(id => document.getElementById(id).value='');
+        document.getElementById('formDeptInput').value = '';
         document.getElementById('formUsername').disabled = false;
         document.getElementById('formRole').value = '';
       }
@@ -268,7 +352,7 @@
       if (!username) return showToast('请输入账号');
       if (!realName) return showToast('请输入姓名');
       if (!roleId) return showToast('请选择角色');
-      const payload = { username, real_name: realName, role_id: roleId || null, dept: document.getElementById('formDept').value.trim(), phone: document.getElementById('formPhone').value.trim(), email: document.getElementById('formEmail').value.trim() };
+      const payload = { username, real_name: realName, role_id: roleId || null, dept: document.getElementById('formDeptInput').value.trim(), phone: document.getElementById('formPhone').value.trim(), email: document.getElementById('formEmail').value.trim() };
       try {
         let r;
         if (editingUserId) {
@@ -308,7 +392,8 @@
     function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
 
     // ===== 启动 =====
-    loadRoles().then(() => loadUsers());
+    loadRoles();
+    loadDeptData().then(() => loadUsers());
   </script>
 </body>
 </html>
