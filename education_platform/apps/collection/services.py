@@ -221,6 +221,7 @@ def _match_official_node(job, parent, node_type, name):
 @transaction.atomic
 def create_analysis_batch(job, tree, *, crawl_task=None, raw_ai_output="", model_name="", batch=None):
     """保存一棵岗位采集 AI 候选树，并逐级匹配正式能力节点。"""
+    # 记录关联的采集任务，并把 AI 分析结果保存为 AnalysisBatch 和 AnalysisNode。
     normalized_tree = normalise_legacy_tree(tree)
     if batch is None:
         batch = AnalysisBatch(job=job, crawl_task=crawl_task)
