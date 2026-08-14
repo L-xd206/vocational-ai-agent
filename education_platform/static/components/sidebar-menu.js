@@ -52,7 +52,8 @@ const ICONS = {
   tool: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z"/></svg>`,
   network: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z"/></svg>`,
   logout: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/></svg>`,
-  user: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>`
+  user: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>`,
+  message: `<svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/></svg>`
 };
 
 const ARROW_ICON = `<svg class="arrow" fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>`;
@@ -375,6 +376,14 @@ class SidebarMenu extends HTMLElement {
           background: #F7FAFC;
         }
 
+        .user-main {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          min-width: 0;
+        }
+
         .user-avatar {
           width: 36px;
           height: 36px;
@@ -494,6 +503,43 @@ class SidebarMenu extends HTMLElement {
           background: #FFF5F5;
           color: #E53E3E;
         }
+
+        /* 消息按钮 + 未读角标 */
+        .msg-btn {
+          position: relative;
+          width: 34px;
+          height: 34px;
+          border: 1px solid #E8EDF3;
+          border-radius: 8px;
+          background: #fff;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: .15s ease;
+          padding: 0;
+        }
+        .msg-btn:hover { border-color: #91caff; background: #F0F7FF; }
+        .msg-btn svg { width: 18px; height: 18px; stroke: #475569; stroke-width: 1.8; }
+        .msg-btn:hover svg { stroke: #3B82F6; }
+        .msg-badge {
+          position: absolute;
+          top: 1px;
+          right: 1px;
+          min-width: 15px;
+          height: 15px;
+          padding: 0 4px;
+          border-radius: 999px;
+          background: #EF4444;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 15px;
+          text-align: center;
+          box-shadow: 0 0 0 1.5px #fff;
+          pointer-events: none;
+        }
+        .msg-badge.hidden { display: none; }
       </style>
 
       <nav class="sidebar">
@@ -514,15 +560,18 @@ class SidebarMenu extends HTMLElement {
         </div>
 
         <div class="user-section">
-          <div class="user-trigger" id="userTrigger" onclick="this.closest('sidebar-menu').toggleUserDropdown()">
-            <div class="user-avatar">${escapeHtml(userName.charAt(0))}</div>
-            <div class="user-info">
-              <span class="user-name">${escapeHtml(userName)}</span>
-              <span class="user-role">${escapeHtml(userRole)}</span>
+          <div class="user-trigger" id="userTrigger">
+            <div class="user-main" onclick="this.closest('sidebar-menu').toggleUserDropdown()">
+              <div class="user-avatar">${escapeHtml(userName.charAt(0))}</div>
+              <div class="user-info">
+                <span class="user-name">${escapeHtml(userName)}</span>
+                <span class="user-role">${escapeHtml(userRole)}</span>
+              </div>
             </div>
-            <svg class="arrow-down" fill="none" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
-            </svg>
+            <button class="msg-btn" type="button" title="消息通知" onclick="event.stopPropagation(); this.closest('sidebar-menu').handleMessages()">
+              ${ICONS.message}
+              <span class="msg-badge hidden" id="msgBadge"></span>
+            </button>
           </div>
           <div class="user-dropdown" id="userDropdown">
             <button class="dropdown-item" onclick="this.closest('sidebar-menu').handleProfile()">
@@ -623,6 +672,29 @@ class SidebarMenu extends HTMLElement {
     }));
     const logoutHref = this.getAttribute('logout-href') || 'login.html';
     window.location.href = logoutHref;
+  }
+
+  handleMessages() {
+    const trigger = this.querySelector('#userTrigger');
+    const dropdown = this.querySelector('#userDropdown');
+    if (dropdown) dropdown.classList.remove('show');
+    if (trigger) trigger.classList.remove('open');
+    this.dispatchEvent(new CustomEvent('messages', {
+      detail: { href: '消息通知.html' },
+      bubbles: true
+    }));
+  }
+
+  updateMsgBadge(count) {
+    const badge = this.querySelector('#msgBadge');
+    if (!badge) return;
+    if (count && count > 0) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.classList.remove('hidden');
+    } else {
+      badge.textContent = '';
+      badge.classList.add('hidden');
+    }
   }
 
   attachEvents() {

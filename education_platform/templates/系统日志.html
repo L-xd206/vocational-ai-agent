@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统日志</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --blue: #3B82F6; --ink: #172033; --muted: #7E8DA8; --line: #E3EBF5; --white: #FFFFFF; --shadow: 0 14px 34px rgba(29, 45, 74, .08); }
+    body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; padding: 12px 18px 10px; background: radial-gradient(circle at 8% 8%, rgba(191, 219, 254, .5), transparent 28%), radial-gradient(circle at 92% 12%, rgba(165, 180, 252, .45), transparent 26%), #F7FAFC; color: var(--ink); font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #E8EEF7; }
+    .tab { position: relative; padding: 10px 18px; border: none; background: transparent; color: #64748B; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
+    .tab.active { color: #2563EB; }
+    .tab.active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: #2563EB; }
+    .filter-bar { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.92); box-shadow: 0 10px 26px rgba(29, 45, 74, .06); }
+    .filter-item { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+    .filter-item.grow { flex: 1; min-width: 220px; }
+    .filter-label { font-size: 12px; font-weight: 800; color: #64748B; }
+    .field { height: 36px; width: 100%; padding: 0 12px; border: 1px solid #DDE8F4; border-radius: 10px; background: #FBFDFF; color: #25324A; font-size: 13px; font-family: inherit; outline: none; }
+    .field:focus { border-color: #93C5FD; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, .08); }
+    .filter-actions { display: flex; gap: 10px; margin-left: auto; }
+    .btn { height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 16px; border: 1px solid #DDE8F4; border-radius: 10px; background: #fff; color: #43516A; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; }
+    .btn:hover { border-color: #B8C8DF; }
+    .btn-primary { border-color: #3B82F6; background: linear-gradient(135deg, #60A5FA, #2563EB); color: #fff; box-shadow: 0 8px 18px rgba(37, 99, 235, .2); }
+    .table-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
+    .table-wrap { flex: 1; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+    thead { background: linear-gradient(180deg, #F8FBFF, #F2F6FB); position: sticky; top: 0; z-index: 1; }
+    th { height: 42px; padding: 8px 12px; text-align: left; font-size: 12px; color: #73829A; font-weight: 800; border-bottom: 1px solid #E8EEF7; white-space: nowrap; }
+    th .sort { margin-left: 4px; color: #CBD5E1; font-size: 10px; }
+    td { padding: 12px; border-bottom: 1px solid #EEF3F8; font-size: 13px; color: #334155; vertical-align: middle; }
+    tbody tr:hover { background: #F8FBFF; }
+    tbody tr.expanded { background: #F0F7FF; }
+    .expand-btn { width: 22px; height: 22px; border: 1px solid #DDE8F4; border-radius: 6px; background: #fff; color: #64748B; cursor: pointer; font-size: 14px; line-height: 1; display: inline-grid; place-items: center; }
+    .expand-btn:hover { border-color: #93C5FD; color: #2563EB; }
+    .detail-row td { background: #F8FBFF; padding: 0 12px 14px 48px; border-bottom: 1px solid #E8EEF7; }
+    .detail-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; padding: 12px 14px; border: 1px dashed #D7E3F4; border-radius: 10px; background: #fff; font-size: 12px; color: #64748B; font-weight: 600; }
+    .detail-box b { color: #1F2D44; font-weight: 800; }
+    .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 14px; border-top: 1px solid #EEF3F8; color: #7E8DA8; font-size: 12px; font-weight: 700; flex-wrap: wrap; }
+    .page-info { margin-right: auto; }
+    .pages { display: flex; gap: 4px; align-items: center; }
+    .page-btn { min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid #DDE8F4; border-radius: 8px; background: #fff; color: #5C6C84; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 12px; }
+    .page-btn.active { border-color: #3B82F6; background: #3B82F6; color: #fff; }
+    .page-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .page-size, .jump-input { height: 30px; border: 1px solid #DDE8F4; border-radius: 8px; background: #fff; color: #5C6C84; font-family: inherit; font-weight: 700; font-size: 12px; }
+    .page-size { padding: 0 8px; }
+    .jump-input { width: 48px; text-align: center; outline: none; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <div class="tabs">
+    <button class="tab active" data-tab="login" onclick="switchTab('login')">登录日志</button>
+    <button class="tab" data-tab="operate" onclick="switchTab('operate')">操作日志</button>
+  </div>
+
+  <section class="filter-bar">
+    <div class="filter-item grow">
+      <label class="filter-label">搜索日志</label>
+      <input class="field" id="keywordInput" placeholder="请输入搜索关键词">
+    </div>
+    <div class="filter-item" style="min-width:260px;">
+      <label class="filter-label">创建时间</label>
+      <input class="field" id="dateRange" type="text" placeholder="开始时间 - 结束时间" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'">
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-primary" onclick="doSearch()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>
+        查询
+      </button>
+      <button class="btn" onclick="resetSearch()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"/></svg>
+        重置
+      </button>
+    </div>
+  </section>
+
+  <section class="table-card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:48px;"></th>
+            <th style="width:56px;"># <span class="sort">↕</span></th>
+            <th>日志内容 <span class="sort">↕</span></th>
+            <th style="width:100px;">操作人ID <span class="sort">↕</span></th>
+            <th style="width:110px;">操作人名称 <span class="sort">↕</span></th>
+            <th style="width:130px;">IP <span class="sort">↕</span></th>
+            <th style="width:110px;">耗时(毫秒) <span class="sort">↕</span></th>
+            <th style="width:110px;">日志类型 <span class="sort">↕</span></th>
+            <th style="width:170px;">创建时间 <span class="sort">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span class="page-info" id="pageInfo">1-10 共 0 条</span>
+      <div class="pages" id="pages"></div>
+      <select class="page-size" id="pageSize" onchange="changePageSize()">
+        <option value="10">10 条/页</option>
+        <option value="20">20 条/页</option>
+        <option value="50">50 条/页</option>
+      </select>
+      <span>跳至</span>
+      <input class="jump-input" id="jumpInput" type="number" min="1" onkeydown="if(event.key==='Enter')jumpPage()">
+      <span>页</span>
+    </div>
+  </section>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let activeTab = 'login', logs = [], total = 0, currentPage = 1, pageSize = 10;
+    let expanded = new Set();
+
+    const detailLabels = {
+      login: [['browser','浏览器'],['os','操作系统'],['location','登录地点']],
+      operate: [['module','所属模块'],['method','请求方法'],['result','执行结果']],
+    };
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+      currentPage = 1; expanded.clear(); loadLogs();
+    }
+
+    async function loadLogs() {
+      const p = { log_type: activeTab === 'login' ? 'login' : 'operation', page: currentPage, page_size: pageSize };
+      const kw = document.getElementById('keywordInput').value.trim();
+      if(kw) p.keyword = kw;
+      const d = document.getElementById('dateRange').value;
+      if(d) { p.start_date = d; p.end_date = d; }
+      const qs = Object.entries(p).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+      try {
+        const r = await fetch('/api/system-logs?'+qs); const data = await r.json();
+        if (data.ok) { logs = data.logs; total = data.total; renderTable(); renderPagination(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      if (!logs.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#94A3B8;">暂无日志数据</td></tr>'; return; }
+      const start = (currentPage - 1) * pageSize;
+      let html = '';
+      logs.forEach((l, idx) => {
+        const open = expanded.has(l.id);
+        const labels = detailLabels[activeTab] || [];
+        const detailHtml = labels.map(([k,label]) => `<div>${label}：<b>${escapeHtml((l.detail && l.detail[k]) || '-')}</b></div>`).join('');
+        html += `<tr class="${open?'expanded':''}">
+          <td><button class="expand-btn" onclick="toggleExpand(${l.id})">${open?'−':'+'}</button></td>
+          <td>${start + idx + 1}</td>
+          <td>${escapeHtml(l.content)}</td>
+          <td>${l.user_id || ''}</td>
+          <td>${escapeHtml(l.username)}</td>
+          <td>${escapeHtml(l.ip)}</td>
+          <td>${l.duration_ms ?? ''}</td>
+          <td>${escapeHtml(l.log_type_display)}</td>
+          <td>${escapeHtml(l.created_at)}</td>
+        </tr>`;
+        if (open) html += `<tr class="detail-row"><td colspan="9"><div class="detail-box">${detailHtml}</div></td></tr>`;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function toggleExpand(id) {
+      expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+      renderTable();
+    }
+
+    function renderPagination() {
+      const tp = Math.max(1, Math.ceil(total/pageSize));
+      const from = total ? (currentPage-1)*pageSize + 1 : 0;
+      const to = Math.min(currentPage*pageSize, total);
+      document.getElementById('pageInfo').textContent = `${from}-${to} 共 ${total} 条`;
+      let h = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+      for(let i=1;i<=tp;i++) h += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+      h += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===tp?'disabled':''}>›</button>`;
+      document.getElementById('pages').innerHTML = h;
+    }
+
+    function goPage(p) { const tp=Math.max(1,Math.ceil(total/pageSize)); if(p<1||p>tp) return; currentPage=p; expanded.clear(); loadLogs(); }
+    function jumpPage() { const v=Number(document.getElementById('jumpInput').value); if(Number.isFinite(v)) goPage(v); }
+    function changePageSize() { pageSize = Number(document.getElementById('pageSize').value)||10; currentPage=1; expanded.clear(); loadLogs(); }
+    function doSearch() { currentPage=1; expanded.clear(); loadLogs(); }
+    function resetSearch() { document.getElementById('keywordInput').value=''; document.getElementById('dateRange').value=''; document.getElementById('dateRange').type='text'; currentPage=1; loadLogs(); }
+
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+    loadLogs();
+  </script>
+</body>
+</html>
