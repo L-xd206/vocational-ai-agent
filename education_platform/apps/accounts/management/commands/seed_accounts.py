@@ -27,7 +27,7 @@ PERMISSIONS = [
     {"module": "系统管理", "name": "角色管理", "code": "role_manage", "url": "角色管理.html"},
     {"module": "系统管理", "name": "系统日志", "code": "system_log", "url": "系统日志.html"},
     {"module": "个人", "name": "个人中心", "code": "profile", "url": "个人中心.html"},
-    {"module": "个人", "name": "消息通知", "code": "message", "url": "消息通知.html"},
+    {"module": "系统管理", "name": "消息通知", "code": "message", "url": "消息通知.html"},
 ]
 
 
@@ -44,10 +44,19 @@ class Command(BaseCommand):
         ))
 
     def seed_permissions(self):
-        """预置 18 个权限点（幂等：重复跑不重复插）"""
+        """预置 18 个权限点（幂等：重复跑不重复插，已存在的会更新 module/name/url）"""
         with transaction.atomic():
             for item in PERMISSIONS:
-                Permission.objects.get_or_create(code=item["code"], defaults=item)
+                perm, created = Permission.objects.get_or_create(code=item["code"], defaults=item)
+                if not created:
+                    # 已存在的权限点，用最新值覆盖（如搬家：消息通知从"个人"移到"系统管理"）
+                    changed = False
+                    for field in ["module", "name", "url"]:
+                        if getattr(perm, field) != item[field]:
+                            setattr(perm, field, item[field])
+                            changed = True
+                    if changed:
+                        perm.save()
 
     def seed_roles_and_admin(self):
         """内置角色 + admin 账号（三态：无号建号建卡 / 有号无卡补卡 / 都全跳过）"""

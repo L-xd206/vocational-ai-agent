@@ -509,6 +509,9 @@
             label: '系统管理',
             icon: 'cog',
             children: [
+              { label: '组织机构', href: '组织机构.html' },
+              { label: '班级管理', href: '班级管理.html' },
+              { label: '学生管理', href: '学生管理.html' },
               { label: '用户管理', href: '用户管理.html' },
               { label: '角色管理', href: '角色管理.html' }
             ]
@@ -532,6 +535,22 @@
           frame.src = href;
         }
       }
+    });
+
+    // 加载当前用户身份（头像 + 用户名 + 角色）
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.ok) {
+        const u = d.user;
+        const sidebar = document.getElementById('sidebar');
+        sidebar.setAttribute('user-name', u.real_name || u.username);
+        if (u.role) sidebar.setAttribute('user-role', u.role.name);
+        if (u.avatar) sidebar.setAttribute('user-avatar', u.avatar);
+      }
+    });
+
+    // 退出登录：调后端销毁会话（组件负责跳转）
+    document.getElementById('sidebar').addEventListener('logout', function() {
+      fetch('/api/auth/logout', { method: 'POST' });
     });
 
     // 底部头像菜单：个人中心

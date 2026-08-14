@@ -205,7 +205,15 @@ def api_user_detail(request, user_id):
             return JsonResponse({"error": "不能删除自己的账号"}, status=400)
         target.delete()
         return JsonResponse({"ok": True})
+    # GET：详情
+    if request.method == "GET":
+        target = User.objects.filter(pk=user_id).select_related("profile__role").first()
+        if target is None:
+            return JsonResponse({"error": "用户不存在"}, status=404)
+        return JsonResponse({"ok": True, "user": user_to_dict(target)})
     # PATCH：编辑
+    if request.method != "PATCH":
+        return JsonResponse({"error": "不支持的方法"}, status=405)
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -216,11 +224,9 @@ def api_user_detail(request, user_id):
     profile = getattr(target, "profile", None)
     if profile is None:
         return JsonResponse({"error": "该用户无资料卡"}, status=400)
-    # 更新资料卡字段
     for field in ["real_name", "dept", "phone", "email"]:
         if field in data:
             setattr(profile, field, data[field].strip() if isinstance(data[field], str) else data[field])
-    # 更新角色
     if "role_id" in data:
         role_id = data["role_id"] or None
         profile.role = Role.objects.filter(pk=role_id).first() if role_id else None
@@ -362,7 +368,6 @@ def api_role_members(request, role_id):
     return JsonResponse({"ok": True, "members": members})
 
 
-@csrf_exempt
 def api_profile(request):
     """我的完整资料（GET）+ 编辑基础资料（PATCH）"""
     if not request.user.is_authenticated:
@@ -384,7 +389,6 @@ def api_profile(request):
     return JsonResponse({"ok": True, "profile": user_to_dict(request.user)})
 
 
-@csrf_exempt
 def api_profile_avatar(request):
     """更换头像（PATCH，body: {avatar: "data:image/..."}）"""
     if not request.user.is_authenticated:
@@ -404,7 +408,6 @@ def api_profile_avatar(request):
     return JsonResponse({"ok": True})
 
 
-@csrf_exempt
 def api_profile_password(request):
     """修改密码（需短信验证码，假实现 code=123456）"""
     if not request.user.is_authenticated:
@@ -427,7 +430,6 @@ def api_profile_password(request):
     return JsonResponse({"ok": True})
 
 
-@csrf_exempt
 def api_profile_phone(request):
     """换绑手机（需短信验证码，假实现 code=123456）"""
     if not request.user.is_authenticated:
