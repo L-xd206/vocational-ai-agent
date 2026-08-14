@@ -1,0 +1,253 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>岗位数据采集</title>
+  <link rel="stylesheet" href="{% static 'collection/collection-tree.css' %}?v=20260814-2">
+</head>
+<body>
+  <main class="collection-page">
+    <section class="collection-shell">
+      <header class="page-toolbar">
+        <div class="page-title-wrap">
+          <div class="page-icon">▣</div>
+          <div><h1 class="page-title">岗位数据采集</h1><div class="page-subtitle">招聘数据经AI分析后形成候选能力树，虚体节点可引用或拒纳</div></div>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary" id="configButton">采集任务配置</button>
+          <button class="btn" id="collapseButton">全部收缩</button>
+          <button class="btn" id="originalButton">显示原图谱</button>
+        </div>
+      </header>
+      <div class="status-strip"><span class="status-dot" id="statusDot"></span><span id="statusText">正在加载岗位候选树...</span></div>
+      <section class="tree-board">
+        <div class="tree-inner">
+          <div class="tree-head">
+            <label class="head-cell">岗位<input class="search-input" data-filter="job" placeholder="搜索岗位"></label>
+            <label class="head-cell">岗位能力<input class="search-input" data-filter="ability" placeholder="搜索岗位能力"></label>
+            <label class="head-cell">能力单元<input class="search-input" data-filter="unit" placeholder="搜索能力单元"></label>
+            <label class="head-cell">技能点/知识点<input class="search-input" data-filter="point" placeholder="搜索技能点/知识点"></label>
+          </div>
+          <div class="tree-content" id="treeContent"><div class="tree-loading">正在读取岗位采集数据...</div></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="modal-mask" id="configModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><div class="modal-title-group"><button class="modal-back" id="configBackButton" title="返回来源列表">‹</button><div class="modal-title" id="configModalTitle">采集任务配置</div></div><button class="modal-close" data-close="configModal">×</button></div>
+      <div class="modal-body" id="sourceContainer"><div class="tree-loading" style="min-height:160px">正在读取采集源...</div></div>
+      <div class="modal-foot" id="configModalFoot"><button class="btn" data-close="configModal">关闭</button></div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="messageModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><div class="modal-title" id="messageTitle">提示</div><button class="modal-close" data-close="messageModal">×</button></div>
+      <div class="modal-body" id="messageBody"></div>
+      <div class="modal-foot" id="messageFoot"><button class="btn" data-close="messageModal">关闭</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="{% static 'collection/collection-common.js' %}?v=20260814-2"></script>
+  <script>
+  (() => {
+    const UI = window.CollectionUI;
+    const content = document.getElementById('treeContent');
+    const filters = { job:'', ability:'', unit:'', point:'' };
+    let candidateItems = [], displayedItems = [], sources = [], editingSourceId = null, originalMode = false, allCollapsed = false;
+
+    function setStatus(text, type='') {
+      document.getElementById('statusText').textContent = text;
+      document.getElementById('statusDot').className = `status-dot ${type}`;
+    }
+
+    function render() {
+      UI.render(content, displayedItems, filters, { mode:'candidate' });
+      if (allCollapsed) content.querySelectorAll('.job-tree').forEach(item => item.classList.add('collapsed'));
+    }
+
+    function withoutRejected(nodes) {
+      return (nodes || []).flatMap(node => node.decision_status === 'rejected' ? [] : [{
+        ...node,
+        children:withoutRejected(node.children || [])
+      }]);
+    }
+
+    async function loadCandidates() {
+      setStatus('正在加载岗位候选树...');
+      try {
+        const data = await UI.request('/api/collection/analysis/latest-trees');
+        // 被拒纳节点只属于“未采纳数据”页面，候选页不再继续显示。
+        candidateItems = (data.results || []).map(item => ({
+          ...item,
+          tree:withoutRejected(item.tree || [])
+        }));
+        if (!originalMode) displayedItems = candidateItems;
+        render();
+        const completed = candidateItems.filter(item => item.batch?.status === 'completed').length;
+        setStatus(`共 ${candidateItems.length} 个岗位，${completed} 个岗位已有AI候选树`, 'ok');
+      } catch (error) {
+        content.innerHTML = `<div class="tree-empty">${UI.escapeHtml(error.message)}</div>`;
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function showOriginalGraph() {
+      const button = document.getElementById('originalButton');
+      if (originalMode) {
+        originalMode = false; displayedItems = candidateItems; button.textContent = '显示原图谱'; render();
+        setStatus('已返回AI候选树', 'ok'); return;
+      }
+      button.disabled = true; button.textContent = '加载原图谱...'; setStatus('正在读取正式能力图谱...','running');
+      try {
+        // 原图谱的名称可能与AI候选树不同，切换时清除旧搜索条件，避免数据被旧筛选隐藏。
+        Object.keys(filters).forEach(key => filters[key] = '');
+        document.querySelectorAll('[data-filter]').forEach(input => input.value = '');
+        allCollapsed = false;
+        document.getElementById('collapseButton').textContent = '全部收缩';
+        displayedItems = await Promise.all(candidateItems.map(async item => {
+          try {
+            const data = await UI.request(`/api/ability/${item.job.id}/tree`);
+            if (data.error) throw new Error(data.error);
+            const tree = (data.abilities || []).map(ability => ({
+              ...ability, node_type:'ability', is_virtual:false, decision_status:'not_required',
+              children:(ability.units || []).map(unit => ({
+                ...unit, node_type:'unit', is_virtual:false, decision_status:'not_required',
+                children:(unit.children || []).map(point => ({...point,node_type:'point',is_virtual:false,decision_status:'not_required'}))
+              }))
+            }));
+            return {...item, tree, batch:tree.length ? {status:'completed'} : null};
+          } catch (error) { return {...item, tree:[], batch:{status:'failed',error_message:error.message}}; }
+        }));
+        originalMode = true; button.textContent = '显示AI分析图'; render();
+        const graphCount = displayedItems.filter(item => item.tree.length).length;
+        setStatus(graphCount ? `当前显示正式能力图谱，共 ${graphCount} 个岗位已有图谱` : '当前没有岗位生成正式能力图谱', graphCount ? 'ok' : 'error');
+      } finally { button.disabled = false; }
+    }
+
+    async function openConfig() {
+      const modal = document.getElementById('configModal');
+      modal.classList.add('show');
+      const container = document.getElementById('sourceContainer');
+      container.innerHTML = '<div class="tree-loading" style="min-height:160px">正在读取采集源...</div>';
+      try {
+        const data = await UI.request('/api/collection/sources');
+        sources = data.sources || [];
+        showSourceList();
+      } catch (error) { container.innerHTML = `<div class="tree-empty">${UI.escapeHtml(error.message)}</div>`; }
+    }
+
+    function showSourceList() {
+      editingSourceId = null;
+      document.getElementById('configModalTitle').textContent = '采集任务配置';
+      document.getElementById('configBackButton').classList.remove('show');
+      document.getElementById('configModalFoot').innerHTML = '<button class="btn" data-close="configModal">关闭</button>';
+      const container = document.getElementById('sourceContainer');
+      container.innerHTML = sources.length ? `<div class="source-list">${sources.map(source => `<div class="source-row">
+        <div class="source-row-main"><div class="source-row-name">${UI.escapeHtml(source.name)}</div><div class="source-row-meta">${UI.escapeHtml(source.base_url)}</div></div>
+        <div class="source-row-actions"><span class="source-status${source.is_enabled ? '' : ' off'}">${source.is_enabled ? '已启用' : '已停用'}</span>
+        <button class="source-edit-btn" data-edit-source="${source.id}" title="编辑采集配置" aria-label="编辑${UI.escapeHtml(source.name)}">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z"/></svg>
+        </button></div></div>`).join('')}</div>` : '<div class="tree-empty" style="min-height:160px">系统尚未初始化采集来源，请先执行数据库迁移</div>';
+    }
+
+    function showSourceEditor(sourceId) {
+      const source = sources.find(item => item.id === Number(sourceId));
+      if (!source) return;
+      editingSourceId = source.id;
+      document.getElementById('configModalTitle').textContent = '编辑采集配置';
+      document.getElementById('configBackButton').classList.add('show');
+      document.getElementById('sourceContainer').innerHTML = `<div class="source-card" data-source-id="${source.id}">
+          <div class="source-title"><span>${UI.escapeHtml(source.name)}</span><span class="source-status${source.is_enabled ? '' : ' off'}">${source.is_enabled ? '已启用' : '已停用'}</span></div>
+          <div class="form-grid">
+            <div class="form-item full"><label class="form-label">来源地址（只读）</label><input class="field" data-field="base_url" value="${UI.escapeHtml(source.base_url)}" readonly title="采集网址由对应采集器确定，不能在此修改"></div>
+            <div class="form-item"><label class="form-label">采集间隔（分钟）</label><input class="field" type="number" min="5" max="43200" data-field="interval_minutes" value="${source.interval_minutes}"></div>
+            <div class="form-item"><label class="form-label">每个关键词采集页数</label><input class="field" type="number" min="1" max="10" data-field="pages" value="${source.pages}"></div>
+            <div class="form-item full"><label class="form-label">启用状态</label><label class="switch-line"><input type="checkbox" data-field="is_enabled" ${source.is_enabled ? 'checked' : ''}> 启用该采集来源</label></div>
+          </div></div>`;
+      document.getElementById('configModalFoot').innerHTML = '<button class="btn" id="cancelEditButton">取消</button><button class="btn btn-primary" id="saveConfigButton">保存配置</button>';
+    }
+
+    async function saveConfig() {
+      const button = document.getElementById('saveConfigButton');
+      const card = document.querySelector(`[data-source-id="${editingSourceId}"]`);
+      const source = sources.find(item => item.id === editingSourceId);
+      if (!button || !card || !source) return;
+      button.disabled = true; button.textContent = '保存中...';
+      try {
+        const value = name => card.querySelector(`[data-field="${name}"]`);
+        const data = await UI.request(`/api/collection/sources/${source.id}`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+            interval_minutes:Number(value('interval_minutes').value), pages:Number(value('pages').value),
+            is_enabled:value('is_enabled').checked
+          })
+        });
+        sources = sources.map(item => item.id === source.id ? data.source : item);
+        showSourceList(); UI.toast(`${source.name}配置已保存`);
+      } catch (error) { UI.toast(error.message); }
+      finally { button.disabled = false; button.textContent = '保存配置'; }
+    }
+
+    function showMessage(title, html, confirmText='', onConfirm=null) {
+      document.getElementById('messageTitle').textContent = title;
+      document.getElementById('messageBody').innerHTML = html;
+      const foot = document.getElementById('messageFoot');
+      foot.innerHTML = '<button class="btn" data-close="messageModal">取消</button>' + (confirmText ? `<button class="btn btn-danger" id="messageConfirm">${confirmText}</button>` : '');
+      document.getElementById('messageModal').classList.add('show');
+      if (onConfirm) document.getElementById('messageConfirm').onclick = onConfirm;
+    }
+
+    function closeModal(id) { document.getElementById(id)?.classList.remove('show'); }
+    function findNode(nodeId) {
+      for (const item of displayedItems) for (const ability of item.tree || []) {
+        if (ability.id === nodeId) return ability;
+        for (const unit of ability.children || []) {
+          if (unit.id === nodeId) return unit;
+          const point = (unit.children || []).find(value => value.id === nodeId);
+          if (point) return point;
+        }
+      }
+      return null;
+    }
+
+    async function adopt(button) {
+      button.disabled = true; button.textContent = '引用中...';
+      try { await UI.request(`/api/collection/analysis/nodes/${button.dataset.nodeId}/adopt`, {method:'POST'}); UI.toast('引用成功，节点已更新到能力图谱'); await loadCandidates(); }
+      catch (error) { UI.toast(error.message); button.disabled = false; button.textContent = '引用'; }
+    }
+
+    function reject(button) {
+      const name = button.dataset.nodeName;
+      showMessage('确认拒纳', `<div class="confirm-text">确认拒纳“<strong>${UI.escapeHtml(name)}</strong>”吗？<br>该节点及其下属AI新增节点将移入“未采纳数据”。</div>`, '确认拒纳', async () => {
+        const confirm = document.getElementById('messageConfirm'); confirm.disabled = true; confirm.textContent = '处理中...';
+        try { await UI.request(`/api/collection/analysis/nodes/${button.dataset.nodeId}/reject`, {method:'POST'}); closeModal('messageModal'); UI.toast('已移入未采纳数据'); await loadCandidates(); }
+        catch (error) { UI.toast(error.message); confirm.disabled = false; confirm.textContent = '确认拒纳'; }
+      });
+    }
+
+    function evidence(button) {
+      const node = findNode(Number(button.dataset.nodeId));
+      showMessage('', UI.evidenceDetailsHtml(node));
+      document.getElementById('messageTitle').innerHTML = UI.evidenceHeader(node);
+      document.getElementById('messageFoot').innerHTML = '<button class="btn" data-close="messageModal">关闭</button>';
+    }
+
+    document.querySelectorAll('[data-filter]').forEach(input => input.addEventListener('input', () => { filters[input.dataset.filter] = input.value; render(); }));
+    document.addEventListener('click', event => { const close = event.target.closest('[data-close]'); if (close) closeModal(close.dataset.close); if (event.target.classList.contains('modal-mask')) closeModal(event.target.id); });
+    document.getElementById('sourceContainer').addEventListener('click', event => { const edit = event.target.closest('[data-edit-source]'); if (edit) showSourceEditor(edit.dataset.editSource); });
+    document.getElementById('configModalFoot').addEventListener('click', event => { if (event.target.id === 'saveConfigButton') saveConfig(); if (event.target.id === 'cancelEditButton') showSourceList(); });
+    document.getElementById('configBackButton').addEventListener('click', showSourceList);
+    document.getElementById('configButton').addEventListener('click', openConfig);
+    document.getElementById('originalButton').addEventListener('click', showOriginalGraph);
+    document.getElementById('collapseButton').addEventListener('click', event => { allCollapsed = !allCollapsed; content.querySelectorAll('.job-tree').forEach(item => item.classList.toggle('collapsed', allCollapsed)); event.currentTarget.textContent = allCollapsed ? '全部展开' : '全部收缩'; UI.drawConnections(content); });
+    UI.bindTreeActions(content, { adopt, reject, evidence });
+    loadCandidates();
+  })();
+  </script>
+</body>
+</html>

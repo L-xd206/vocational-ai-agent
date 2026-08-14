@@ -264,6 +264,7 @@ class AnalysisNode(models.Model):
         ("pending", "等待处理"),
         ("adopted", "已引用"),
         ("rejected", "已拒纳"),
+        ("restored", "已恢复到新批次"),
     ]
 
     batch = models.ForeignKey(
@@ -383,6 +384,16 @@ class JobListing(models.Model):
         db_index=True,
         null=True,
         blank=True,
+    )
+
+    # 只由任职要求正文生成，用来判断“这份能力信息以前是否分析过”。
+    # 它与上面的招聘记录指纹分开：企业或标题改变，不代表能力内容变新。
+    content_fingerprint = models.CharField(
+        "任职要求内容指纹",
+        max_length=64,
+        db_index=True,
+        blank=True,
+        default="",
     )
 
     # 招聘详情网页地址

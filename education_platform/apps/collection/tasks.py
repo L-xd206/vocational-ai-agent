@@ -210,7 +210,7 @@ def start_analysis_for_task(task_id: int):
     )
 
     task = CrawlTask.objects.select_related("job").get(id=task_id)
-    requirements = valid_requirements(task)
+    requirements = valid_requirements(task, new_only=True)
     valid_count = len(requirements)
     skipped = valid_count < MIN_VALID_LISTINGS
     _, message = data_quality(valid_count)
@@ -251,7 +251,7 @@ def execute_analysis_batch(batch_id: int):
         task = batch.crawl_task
         if task is None or task.status != "completed":
             raise RuntimeError("请先完成招聘数据采集")
-        requirements = valid_requirements(task)
+        requirements = valid_requirements(task, new_only=True)
         valid_count = len(requirements)
         if valid_count < MIN_VALID_LISTINGS:
             _, message = data_quality(valid_count)
@@ -273,8 +273,21 @@ def execute_analysis_batch(batch_id: int):
         )
         if not result or not result.get("abilities_text"):
             raise RuntimeError((result or {}).get("error") or "AI未返回有效的能力图谱内容")
-        tree = parse_abilities_to_tree(result["abilities_text"])
-        if not tree:
+        raw_output = result["abilities_text"]
+        tree = parse_abilities_to_tree(raw_output)
+        clean_output = re.sub(
+            r"^```(?:json)?\s*|\s*```$",
+            "",
+            raw_output.strip(),
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        try:
+            payload = json.loads(clean_output)
+            items = payload.get("abilities") if isinstance(payload, dict) else payload
+            explicitly_empty = isinstance(items, list) and not items
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            explicitly_empty = False
+        if not tree and not explicitly_empty:
             raise RuntimeError("AI返回内容无法解析为有效候选能力树")
         create_analysis_batch(
             batch.job,

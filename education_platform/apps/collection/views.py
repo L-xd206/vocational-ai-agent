@@ -7,8 +7,9 @@ from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
 from django.db.models import Prefetch
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
 from apps.capabilities.services import serialize_official_tree
@@ -21,8 +22,11 @@ from .services import (
     create_crawl_source,
     create_crawl_task,
     data_quality,
+    merge_rejected_trees,
     reject_analysis_node,
+    restore_rejected_node,
     serialize_analysis_tree,
+    serialize_pending_analysis_batches,
     serialize_crawl_source,
     serialize_rejected_tree,
     update_crawl_source,
@@ -36,16 +40,32 @@ _run_crawl = execute_crawl_task
 _run_candidate_analysis = execute_analysis_batch
 
 
+@login_required
+@ensure_csrf_cookie
+def page_collection(request):
+    """岗位数据采集页面，由主框架 iframe 加载。"""
+    return render(request, "岗位数据采集.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def page_rejected_collection(request):
+    """未采纳数据页面，由主框架 iframe 加载。"""
+    return render(request, "未采纳数据.html")
+
+
 def _json_body(request):
     try:
-        return json.loads(request.body or "{}")
+        data = json.loads(request.body or "{}")
     except json.JSONDecodeError as exc:
         raise ValueError("无效的 JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("JSON 请求体必须是对象")
+    return data
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-@csrf_exempt
 def api_crawl_sources(request):
     """查询采集来源；POST 用于未来新增已实现采集器对应的来源。"""
     if request.method == "GET":
@@ -64,7 +84,6 @@ def api_crawl_sources(request):
 
 @login_required
 @require_http_methods(["PATCH"])
-@csrf_exempt
 def api_crawl_source_detail(request, source_id):
     """编辑某个采集来源的通用配置。"""
     try:
@@ -79,7 +98,6 @@ def api_crawl_source_detail(request, source_id):
 
 @login_required
 @require_http_methods(["POST"])
-@csrf_exempt
 def api_crawl_start(request):
     """手动启动一个岗位的采集；同来源同岗位禁止重复执行。"""
     try:
@@ -183,7 +201,6 @@ def api_crawl_tasks(request):
 
 @login_required
 @require_http_methods(["POST"])
-@csrf_exempt
 def api_analysis_start(request):
     """手动补触发最新已完成任务的候选分析。"""
     try:
@@ -196,7 +213,7 @@ def api_analysis_start(request):
         if existing:
             return JsonResponse({"batch_id": existing.id, "status": existing.status})
 
-        requirements = valid_requirements(task)
+        requirements = valid_requirements(task, new_only=True)
         valid_count = len(requirements)
         if valid_count < MIN_VALID_LISTINGS:
             _, message = data_quality(valid_count)
@@ -248,7 +265,14 @@ def api_analysis_tree(request, batch_id):
 @require_http_methods(["GET"])
 def api_latest_analysis_trees(request):
     """一次返回各岗位的最新分析结果，供岗位采集四列树首屏使用。"""
-    latest_batches = AnalysisBatch.objects.select_related("crawl_task").order_by("-created_at")
+    latest_batches = (
+        AnalysisBatch.objects.select_related("crawl_task")
+        .prefetch_related(Prefetch(
+            "nodes",
+            queryset=AnalysisNode.objects.select_related("college").order_by("sort_order", "id"),
+        ))
+        .order_by("-created_at", "-id")
+    )
     jobs = (
         Job.objects.filter(is_enabled=True, chain__is_enabled=True)
         .select_related("chain")
@@ -263,6 +287,10 @@ def api_latest_analysis_trees(request):
     results = []
     for job in jobs:
         batch = job.collection_batches[0] if job.collection_batches else None
+        completed_batches = [
+            candidate for candidate in job.collection_batches
+            if candidate.status == "completed"
+        ]
         results.append({
             "job": {
                 "id": job.id,
@@ -279,8 +307,8 @@ def api_latest_analysis_trees(request):
                 "created_at": batch.created_at.isoformat(),
             } if batch else None),
             "tree": (
-                serialize_analysis_tree(batch)
-                if batch and batch.status == "completed" else []
+                serialize_pending_analysis_batches(completed_batches)
+                if completed_batches else []
             ),
         })
     return JsonResponse({"results": results})
@@ -288,7 +316,6 @@ def api_latest_analysis_trees(request):
 
 @login_required
 @require_http_methods(["POST"])
-@csrf_exempt
 def api_analysis_node_adopt(request, node_id):
     try:
         node = AnalysisNode.objects.select_related("batch__job", "parent", "matched_node").get(id=node_id)
@@ -307,7 +334,6 @@ def api_analysis_node_adopt(request, node_id):
 
 @login_required
 @require_http_methods(["POST"])
-@csrf_exempt
 def api_analysis_node_reject(request, node_id):
     try:
         node = AnalysisNode.objects.select_related("matched_node").get(id=node_id)
@@ -320,20 +346,52 @@ def api_analysis_node_reject(request, node_id):
 
 
 @login_required
+@require_http_methods(["POST"])
+def api_analysis_node_restore(request, node_id):
+    try:
+        node = AnalysisNode.objects.select_related(
+            "batch__job", "parent", "matched_node", "college"
+        ).get(id=node_id)
+        restored, batch = restore_rejected_node(node)
+        return JsonResponse({
+            "node_id": restored.id,
+            "batch_id": batch.id,
+            "decision_status": restored.decision_status,
+            "message": "节点已返回岗位数据采集，尚未写入正式能力图谱",
+        })
+    except AnalysisNode.DoesNotExist:
+        return JsonResponse({"error": "AI分析节点不存在"}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@login_required
 @require_http_methods(["GET"])
 def api_rejected_analysis_tree(request):
-    """返回全部未采纳历史，并为叶子拒纳数据保留完整祖先路径。"""
+    """按岗位合并未采纳历史，并为拒纳节点保留完整祖先路径。"""
     batches = AnalysisBatch.objects.filter(
         nodes__decision_status="rejected",
-    ).select_related("job", "crawl_task").distinct().order_by("-created_at")
+    ).select_related("job__chain", "crawl_task").distinct().order_by("-created_at")
     if request.GET.get("job_id"):
         batches = batches.filter(job_id=request.GET["job_id"])
-    return JsonResponse({
-        "results": [{
-            "batch_id": batch.id,
-            "job": {"id": batch.job_id, "name": batch.job.name},
-            "crawl_task_id": batch.crawl_task_id,
-            "created_at": batch.created_at.isoformat(),
-            "tree": serialize_rejected_tree(batch),
-        } for batch in batches],
-    })
+    batches_by_job = {}
+    for batch in batches:
+        batches_by_job.setdefault(batch.job_id, []).append(batch)
+
+    results = []
+    for job_batches in batches_by_job.values():
+        latest = job_batches[0]
+        results.append({
+            "batch_id": latest.id,
+            "batch_ids": [batch.id for batch in job_batches],
+            "job": {
+                "id": latest.job_id,
+                "name": latest.job.name,
+                "chain_id": latest.job.chain_id,
+                "chain_name": latest.job.chain.name,
+            },
+            "crawl_task_id": latest.crawl_task_id,
+            "created_at": latest.created_at.isoformat(),
+            "tree": merge_rejected_trees(job_batches),
+        })
+    return JsonResponse({"results": results})

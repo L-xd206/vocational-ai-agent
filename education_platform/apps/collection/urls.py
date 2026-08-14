@@ -5,6 +5,8 @@ from . import views
 app_name = "collection"
 
 urlpatterns = [
+    path("岗位数据采集.html", views.page_collection, name="collection-page"),
+    path("未采纳数据.html", views.page_rejected_collection, name="rejected-page"),
     path("api/collection/sources", views.api_crawl_sources, name="crawl-sources"),
     path(
         "api/collection/sources/<int:source_id>",
@@ -30,6 +32,11 @@ urlpatterns = [
         "api/collection/analysis/nodes/<int:node_id>/reject",
         views.api_analysis_node_reject,
         name="analysis-node-reject",
+    ),
+    path(
+        "api/collection/analysis/nodes/<int:node_id>/restore",
+        views.api_analysis_node_restore,
+        name="analysis-node-restore",
     ),
     path(
         "api/collection/rejected-nodes",

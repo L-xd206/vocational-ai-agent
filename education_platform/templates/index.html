@@ -474,8 +474,21 @@
   <script src="/static/components/sidebar-menu.js"></script>
 
   <script>
-    // 配置菜单数据：两组菜单（能力图谱组 + 系统管理组）
+    // 侧边栏只在主框架中配置一次，右侧业务页面通过 iframe 复用它。
     document.getElementById('sidebar').setMenuData([
+      {
+        group: '岗位采集',
+        items: [
+          {
+            label: '岗位采集',
+            icon: 'monitor',
+            children: [
+              { label: '岗位数据采集', href: '岗位数据采集.html' },
+              { label: '未采纳数据', href: '未采纳数据.html' }
+            ]
+          }
+        ]
+      },
       {
         group: '能力图谱',
         items: [

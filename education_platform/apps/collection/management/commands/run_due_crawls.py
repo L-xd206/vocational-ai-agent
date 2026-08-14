@@ -1,4 +1,5 @@
 from datetime import timedelta
+import time
 
 from django.core.management.base import BaseCommand
 from django.db import models, transaction
@@ -13,7 +14,36 @@ from apps.industry.models import Job
 class Command(BaseCommand):
     help = "执行所有已到期采集来源下的启用岗位"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--loop",
+            action="store_true",
+            help="作为常驻调度进程持续检查到期任务",
+        )
+        parser.add_argument(
+            "--poll-seconds",
+            type=int,
+            default=60,
+            help="常驻模式的检查间隔秒数，默认60秒",
+        )
+
     def handle(self, *args, **options):
+        poll_seconds = max(5, options["poll_seconds"])
+        if not options["loop"]:
+            self.run_once()
+            return
+
+        self.stdout.write(
+            self.style.SUCCESS(f"岗位采集调度器已启动，每 {poll_seconds} 秒检查一次")
+        )
+        try:
+            while True:
+                self.run_once()
+                time.sleep(poll_seconds)
+        except KeyboardInterrupt:
+            self.stdout.write(self.style.WARNING("岗位采集调度器已停止"))
+
+    def run_once(self):
         now = timezone.now()
         source_ids = list(
             CrawlSource.objects.filter(is_enabled=True)

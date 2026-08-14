@@ -1,0 +1,75 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>未采纳数据</title>
+  <link rel="stylesheet" href="{% static 'collection/collection-tree.css' %}?v=20260814-2">
+</head>
+<body>
+  <main class="collection-page">
+    <section class="collection-shell">
+      <header class="page-toolbar">
+        <div class="page-title-wrap">
+          <div class="page-icon" style="color:#ec5a8d">⊘</div>
+          <div><h1 class="page-title">未采纳数据</h1><div class="page-subtitle">展示被拒纳的AI候选节点，并保留完整的岗位能力层级路径</div></div>
+        </div>
+        <div class="toolbar-actions"><button class="btn" id="refreshButton">刷新数据</button><button class="btn" id="collapseButton">全部收缩</button></div>
+      </header>
+      <div class="status-strip"><span class="status-dot" id="statusDot"></span><span id="statusText">正在加载未采纳数据...</span></div>
+      <section class="tree-board">
+        <div class="tree-inner">
+          <div class="tree-head">
+            <label class="head-cell">岗位<input class="search-input" data-filter="job" placeholder="搜索岗位"></label>
+            <label class="head-cell">岗位能力<input class="search-input" data-filter="ability" placeholder="搜索岗位能力"></label>
+            <label class="head-cell">能力单元<input class="search-input" data-filter="unit" placeholder="搜索能力单元"></label>
+            <label class="head-cell">技能点/知识点<input class="search-input" data-filter="point" placeholder="搜索技能点/知识点"></label>
+          </div>
+          <div class="tree-content" id="treeContent"><div class="tree-loading">正在读取未采纳数据...</div></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <div class="modal-mask" id="evidenceModal">
+    <div class="modal"><div class="modal-head"><div class="modal-title" id="evidenceTitle">AI分析依据</div><button class="modal-close" data-close="evidenceModal">×</button></div><div class="modal-body" id="evidenceBody"></div><div class="modal-foot"><button class="btn" data-close="evidenceModal">关闭</button></div></div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="{% static 'collection/collection-common.js' %}?v=20260814-2"></script>
+  <script>
+  (() => {
+    const UI = window.CollectionUI, content = document.getElementById('treeContent');
+    const filters = {job:'',ability:'',unit:'',point:''};
+    let items = [], allCollapsed = false;
+
+    function setStatus(text,type='') { document.getElementById('statusText').textContent=text; document.getElementById('statusDot').className=`status-dot ${type}`; }
+    function render() { UI.render(content,items,filters,{mode:'rejected'}); if(allCollapsed) content.querySelectorAll('.job-tree').forEach(item=>item.classList.add('collapsed')); }
+    async function load() {
+      setStatus('正在加载未采纳数据...');
+      try {
+        // 两个接口都会读取同一批分析数据。顺序请求可避免 SQLite 在刚完成
+        // 引用/拒纳事务后被两个并发请求争用，导致页面偶发 HTTP 500。
+        const rejected = await UI.request('/api/collection/rejected-nodes');
+        items = (rejected.results||[]).map(result=>({job:result.job,batch:{id:result.batch_id,status:'completed',created_at:result.created_at},tree:result.tree||[]}));
+        render(); setStatus(`共 ${items.length} 个岗位包含未采纳节点`,'ok');
+      } catch(error) { content.innerHTML=`<div class="tree-empty">${UI.escapeHtml(error.message)}</div>`; setStatus(error.message,'error'); }
+    }
+    function findNode(id) { for(const item of items) for(const ability of item.tree||[]){ if(ability.id===id)return ability; for(const unit of ability.children||[]){if(unit.id===id)return unit;const point=(unit.children||[]).find(value=>value.id===id);if(point)return point;}} return null; }
+    function evidence(button) { const node=findNode(Number(button.dataset.nodeId)); document.getElementById('evidenceTitle').innerHTML=UI.evidenceHeader(node); document.getElementById('evidenceBody').innerHTML=UI.evidenceDetailsHtml(node); document.getElementById('evidenceModal').classList.add('show'); }
+    async function restore(button) {
+      button.disabled=true; button.textContent='返回中...';
+      try {
+        const result=await UI.request(`/api/collection/analysis/nodes/${button.dataset.nodeId}/restore`,{method:'POST'});
+        UI.toast(result.message||'节点已返回岗位数据采集');
+        await load();
+      } catch(error) { UI.toast(error.message); button.disabled=false; button.textContent='引用'; }
+    }
+    document.querySelectorAll('[data-filter]').forEach(input=>input.addEventListener('input',()=>{filters[input.dataset.filter]=input.value;render();}));
+    document.getElementById('refreshButton').addEventListener('click',load);
+    document.getElementById('collapseButton').addEventListener('click',event=>{allCollapsed=!allCollapsed;content.querySelectorAll('.job-tree').forEach(item=>item.classList.toggle('collapsed',allCollapsed));event.currentTarget.textContent=allCollapsed?'全部展开':'全部收缩';UI.drawConnections(content);});
+    document.addEventListener('click',event=>{const close=event.target.closest('[data-close]');if(close)document.getElementById(close.dataset.close)?.classList.remove('show');if(event.target.classList.contains('modal-mask'))event.target.classList.remove('show');});
+    UI.bindTreeActions(content,{evidence,restore}); load();
+  })();
+  </script>
+</body>
+</html>
