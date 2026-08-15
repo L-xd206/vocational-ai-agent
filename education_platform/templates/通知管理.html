@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通知管理</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .toolbar-filters { display:flex; align-items:center; gap:10px; flex:1; min-width:0; flex-wrap:wrap; }
+    .toolbar-filters .field { width:auto; min-width:120px; }
+    .toolbar-filters .field.search { flex:1; min-width:200px; max-width:280px; }
+    .toolbar-actions { display:flex; align-items:center; gap:10px; margin-left:auto; flex-shrink:0; }
+    .field { height:34px; width:100%; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; transition:.16s ease; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    textarea.field { height:auto; padding:10px 12px; resize:vertical; line-height:1.6; }
+    .table-card { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--white); box-shadow:var(--shadow); }
+    .table-wrap { flex:1; overflow-y:auto; min-height:0; }
+    table { width:100%; table-layout:fixed; border-collapse:collapse; }
+    thead { background:linear-gradient(180deg,#F8FBFF,#F2F6FB); position:sticky; top:0; z-index:1; }
+    th { height:38px; padding:8px 10px; text-align:center; font-size:12px; color:#73829A; font-weight:800; letter-spacing:.3px; border-bottom:1px solid #E8EEF7; }
+    td { padding:8px 10px; border-bottom:1px solid #EEF3F8; font-size:12px; color:#26344D; vertical-align:middle; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    tbody tr { transition:.14s ease; } tbody tr:hover { background:#F8FBFF; } tbody tr:last-child td { border-bottom:none; }
+    .name-cell { font-weight:800; color:#1F2D44; }
+    .tag { display:inline-flex; align-items:center; padding:2px 9px; border-radius:7px; font-size:11px; font-weight:800; background:#EEF4FE; color:#3B82F6; }
+    .status { display:inline-flex; align-items:center; gap:5px; font-weight:800; font-size:12px; }
+    .status::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .status.on { color:#16a34a; } .status.draft { color:#3B82F6; } .status.off { color:#94a3b8; }
+    .actions { display:flex; justify-content:center; gap:6px; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; transition:.14s ease; }
+    .text-btn:hover { background:#EFF6FF; } .text-btn.danger { color:#EF4444; } .text-btn.danger:hover { background:#FEF2F2; }
+    .pagination { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-top:1px solid #EEF3F8; color:#7E8DA8; font-size:12px; font-weight:700; }
+    .pages { display:flex; gap:6px; } .page-btn { min-width:30px; height:30px; border:1px solid #DDE8F4; border-radius:9px; background:#fff; color:#5C6C84; cursor:pointer; font-family:inherit; font-weight:800; } .page-btn.active { border-color:#3B82F6; background:#3B82F6; color:#fff; }
+    .modal-mask { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); } .modal-mask.show { display:flex; }
+    .modal { width:560px; max-width:92vw; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:17px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:20px; }
+    .form-item.full { grid-column:1/-1; } .form-label { display:block; margin-bottom:7px; color:#64748B; font-size:12px; font-weight:800; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    .btn-danger { border-color:#ef4444; background:linear-gradient(135deg,#f87171,#ef4444); color:#fff; box-shadow:0 10px 22px rgba(239,68,68,.22); }
+    .toast { position:fixed; right:22px; top:22px; z-index:120; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; } .toast.show { opacity:1; transform:translateY(0); }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="toolbar">
+    <div class="toolbar-filters">
+      <input class="field search" id="keywordInput" placeholder="搜索通知标题、内容、发布人" oninput="searchList()">
+      <select class="field" id="typeFilter" onchange="searchList()">
+        <option value="">全部类型</option>
+        <option value="system">系统公告</option>
+        <!-- 后续 type 加值（course/collection/capability）时在此追加 -->
+      </select>
+      <select class="field" id="statusFilter" onchange="searchList()">
+        <option value="">全部状态</option>
+        <option value="draft">草稿</option>
+        <option value="published">已发布</option>
+        <option value="offline">已下架</option>
+      </select>
+      <button class="btn" onclick="resetFilters()">重置</button>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn btn-primary" onclick="openModal()">新增通知</button>
+    </div>
+  </section>
+
+  <section class="table-card">
+    <div class="table-wrap">
+      <table>
+        <colgroup><col style="width:22%"><col style="width:12%"><col style="width:11%"><col style="width:11%"><col style="width:15%"><col style="width:15%"><col style="width:14%"></colgroup>
+        <thead><tr><th>通知标题</th><th>类型</th><th>状态</th><th>发布人</th><th>发布时间</th><th>更新时间</th><th>操作</th></tr></thead>
+        <tbody id="tableBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);">加载中...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination"><span id="pageInfo">共 0 条记录</span><div class="pages" id="paginationBtns"></div></div>
+  </section>
+
+  <!-- 新增/编辑弹窗 -->
+  <div class="modal-mask" id="editModal" onclick="closeModal(event,'editModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="modalTitle">新增通知</div><button class="modal-close" onclick="hideModal('editModal')">×</button></div>
+      <div class="modal-body">
+        <div class="form-item full"><label class="form-label">通知标题</label><input class="field" id="formTitle" placeholder="请输入通知标题"></div>
+        <div class="form-item full"><label class="form-label">通知内容</label><textarea class="field" id="formContent" rows="6" placeholder="请输入通知内容"></textarea></div>
+        <div class="form-item full"><label class="form-label">受众</label><select class="field" id="formAudience"><option value="">所有人</option></select></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="hideModal('editModal')">取消</button>
+        <button class="btn" onclick="saveNotification(false)">保存</button>
+        <button class="btn btn-primary" onclick="saveNotification(true)">发布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div class="modal-mask" id="confirmModal" onclick="closeModal(event,'confirmModal')">
+    <div class="modal" style="width:420px" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title">确认删除</div><button class="modal-close" onclick="hideModal('confirmModal')">×</button></div>
+      <div class="modal-body" style="display:block"><p id="confirmMsg" style="color:#334155;font-size:14px"></p></div>
+      <div class="modal-foot"><button class="btn" onclick="hideModal('confirmModal')">取消</button><button class="btn btn-danger" onclick="confirmDelete()">删除</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let notifications = [], total = 0, currentPage = 1, pageSize = 10;
+    let editingId = null, pendingDeleteId = null;
+    let roles = [];  // 受众角色列表
+
+    const statusText = { draft:'草稿', published:'已发布', offline:'已下架' };
+    const statusCls = { draft:'draft', published:'on', offline:'off' };
+
+    async function loadRoles() {
+      try {
+        const r = await fetch('/api/roles?page_size=100'); const d = await r.json();
+        if (d.ok) roles = d.roles;
+        populateAudience();
+      } catch(e) { console.error(e); }
+    }
+
+    function populateAudience() {
+      const sel = document.getElementById('formAudience'), prev = sel.value;
+      sel.innerHTML = '<option value="">所有人</option>' + roles.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+      sel.value = prev;
+    }
+
+    async function loadNotifications() {
+      const p = { page:currentPage, page_size:pageSize };
+      const kw = document.getElementById('keywordInput').value.trim();
+      if(kw) p.keyword = kw;
+      ['typeFilter','statusFilter'].forEach(id => { const v=document.getElementById(id).value; if(v) p[id.replace('Filter','')]=v; });
+      const qs = Object.entries(p).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+      try {
+        const r = await fetch('/api/notifications?'+qs); const d = await r.json();
+        if (d.ok) { notifications = d.notifications; total = d.total; renderTable(); renderPagination(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      if (!notifications.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);">暂无数据</td></tr>'; return; }
+      tbody.innerHTML = notifications.map(n => {
+        const actionBtns = [];
+        if (n.status !== 'published') actionBtns.push(`<button class="text-btn" onclick="openModal(${n.id})">编辑</button>`);
+        actionBtns.push(n.status === 'published'
+          ? `<button class="text-btn" onclick="setStatus(${n.id},'offline')">下架</button>`
+          : `<button class="text-btn" onclick="setStatus(${n.id},'published')">发布</button>`);
+        actionBtns.push(`<button class="text-btn danger" onclick="askDelete(${n.id},'${escapeAttr(n.title)}')">删除</button>`);
+        return `<tr>
+          <td style="text-align:left"><span class="name-cell">${escapeHtml(n.title)}</span></td>
+          <td><span class="tag">${escapeHtml(n.type_display)}</span></td>
+          <td><span class="status ${statusCls[n.status]||''}">${statusText[n.status]||n.status}</span></td>
+          <td>${escapeHtml(n.publisher||'系统')}</td>
+          <td>${escapeHtml(n.published_at||'-')}</td>
+          <td>${escapeHtml(n.updated_at)}</td>
+          <td><div class="actions">${actionBtns.join('')}</div></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderPagination() {
+      const tp = Math.max(1,Math.ceil(total/pageSize));
+      document.getElementById('pageInfo').textContent = `共 ${total} 条记录，第 ${currentPage}/${tp} 页`;
+      let h = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+      for(let i=1;i<=tp;i++) h += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+      h += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===tp?'disabled':''}>›</button>`;
+      document.getElementById('paginationBtns').innerHTML = h;
+    }
+
+    function goPage(p) { const tp=Math.max(1,Math.ceil(total/pageSize)); if(p<1||p>tp) return; currentPage=p; loadNotifications(); }
+    function searchList() { currentPage=1; loadNotifications(); }
+    function resetFilters() { ['keywordInput','typeFilter','statusFilter'].forEach(id=>document.getElementById(id).value=''); currentPage=1; loadNotifications(); }
+
+    function openModal(id) {
+      editingId = id || null;
+      document.getElementById('modalTitle').textContent = id ? '编辑通知' : '新增通知';
+      populateAudience();
+      if (id) {
+        const n = notifications.find(x=>x.id===id); if(!n) return;
+        if (n.status === 'published') { showToast('已发布通知不可编辑，请先下架'); return; }
+        document.getElementById('formTitle').value = n.title;
+        document.getElementById('formContent').value = n.content;
+        document.getElementById('formAudience').value = n.audience_id || '';
+      } else {
+        document.getElementById('formTitle').value = '';
+        document.getElementById('formContent').value = '';
+        document.getElementById('formAudience').value = '';
+      }
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    async function saveNotification(publish) {
+      const title = document.getElementById('formTitle').value.trim();
+      const content = document.getElementById('formContent').value.trim();
+      if (!title) return showToast('请填写通知标题');
+      if (!content) return showToast('请填写通知内容');
+      const audience_id = document.getElementById('formAudience').value || null;
+      try {
+        let r;
+        if (editingId) {
+          r = await fetch(`/api/notifications/${editingId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify({title, content, audience_id}) });
+          const d = await r.json();
+          if (!d.ok) return showToast(d.error||'保存失败');
+          if (publish) {
+            r = await fetch(`/api/notifications/${editingId}/status`, { method:'POST', headers:jsonHeaders(), body:JSON.stringify({status:'published'}) });
+            const d2 = await r.json();
+            if (!d2.ok) return showToast(d2.error||'发布失败');
+          }
+        } else {
+          r = await fetch('/api/notifications', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({title, content, audience_id, status: publish?'published':'draft'}) });
+          const d = await r.json();
+          if (!d.ok) return showToast(d.error||'保存失败');
+        }
+        hideModal('editModal'); loadNotifications(); showToast(publish?'通知已发布':'通知已保存');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    async function setStatus(id, status) {
+      try {
+        const r = await fetch(`/api/notifications/${id}/status`, { method:'POST', headers:jsonHeaders(), body:JSON.stringify({status}) });
+        const d = await r.json();
+        if (d.ok) { loadNotifications(); showToast(status==='published'?'通知已发布':'通知已下架'); }
+        else showToast(d.error||'操作失败');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function askDelete(id, title) {
+      pendingDeleteId = id;
+      document.getElementById('confirmMsg').textContent = `确定要删除通知「${title}」吗？删除后不可恢复。`;
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    async function confirmDelete() {
+      if (!pendingDeleteId) return;
+      try {
+        const r = await fetch(`/api/notifications/${pendingDeleteId}`, { method:'DELETE', headers:jsonHeaders() });
+        const d = await r.json();
+        if (d.ok) { hideModal('confirmModal'); loadNotifications(); showToast('已删除'); }
+        else showToast(d.error||'删除失败');
+      } catch(e) { showToast('网络错误'); }
+      pendingDeleteId = null;
+    }
+
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e,id) { if(e.target.id===id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    loadRoles().then(() => loadNotifications());
+  </script>
+</body>
+</html>

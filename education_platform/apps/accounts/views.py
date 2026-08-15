@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from .models import Permission, Role, UserProfile
+from apps.notifications.api import write_system_log
 
 User = get_user_model()
 
@@ -51,16 +52,21 @@ def api_login(request):
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({"error": "无效的 JSON"}, status=400)
-    user = authenticate(request, username=data.get("username"), password=data.get("password"))
+    username = data.get("username", "")
+    user = authenticate(request, username=username, password=data.get("password"))
     if not user:
+        write_system_log("login", f"用户名: {username},登录失败: 密码错误", request=request)
         return JsonResponse({"error": "账号或密码错误"}, status=401)
     login(request, user)
+    write_system_log("login", f"用户名: {user.username},登录成功!", request=request)
     # 身份信息不在这里返回，前端跳转后调 /api/auth/me 获取（避免重复序列化）
     return JsonResponse({"ok": True})
 
 
 @require_http_methods(["POST"])
 def api_logout(request):
+    if request.user.is_authenticated:
+        write_system_log("login", f"用户名: {request.user.username},退出成功!", request=request)
     logout(request)
     return JsonResponse({"ok": True})
 

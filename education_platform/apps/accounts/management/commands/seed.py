@@ -18,4 +18,7 @@ class Command(BaseCommand):
         self.stdout.write("\n[organizations]")
         call_command("seed_organizations")
 
+        self.stdout.write("\n[notifications]")
+        call_command("seed_notifications")
+
         self.stdout.write(self.style.SUCCESS("\n=== 全部 seed 完成 ==="))

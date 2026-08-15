@@ -509,11 +509,13 @@
             label: '系统管理',
             icon: 'cog',
             children: [
+              { label: '通知管理', href: '通知管理.html' },
               { label: '组织机构', href: '组织机构.html' },
               { label: '班级管理', href: '班级管理.html' },
               { label: '学生管理', href: '学生管理.html' },
               { label: '用户管理', href: '用户管理.html' },
-              { label: '角色管理', href: '角色管理.html' }
+              { label: '角色管理', href: '角色管理.html' },
+              { label: '系统日志', href: '系统日志.html' }
             ]
           }
         ]
@@ -545,6 +547,7 @@
         sidebar.setAttribute('user-name', u.real_name || u.username);
         if (u.role) sidebar.setAttribute('user-role', u.role.name);
         if (u.avatar) sidebar.setAttribute('user-avatar', u.avatar);
+        refreshMsgBadge();
       }
     });
 
@@ -560,6 +563,27 @@
         frame.src = '个人中心.html';
       }
       document.querySelectorAll('sidebar-menu .sub-menu-item').forEach(el => el.classList.remove('active'));
+    });
+
+    // 消息通知按钮
+    document.getElementById('sidebar').addEventListener('messages', function() {
+      const frame = document.getElementById('contentFrame');
+      if (frame.getAttribute('src') !== '消息通知.html') {
+        frame.src = '消息通知.html';
+      }
+      document.querySelectorAll('sidebar-menu .sub-menu-item').forEach(el => el.classList.remove('active'));
+    });
+
+    // 未读角标
+    function refreshMsgBadge() {
+      fetch('/api/my-notifications/unread-count').then(r => r.json()).then(d => {
+        if (d.ok) document.getElementById('sidebar').updateMsgBadge(d.unread_count);
+      }).catch(() => {});
+    }
+
+    // 消息通知页里标记已读后，通知父窗口刷新角标
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'msg-badge-refresh') refreshMsgBadge();
     });
 
     // 默认加载能力图谱库页面
