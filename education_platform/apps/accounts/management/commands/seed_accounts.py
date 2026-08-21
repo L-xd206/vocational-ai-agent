@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.accounts.models import Permission, Role, UserProfile
+from apps.organizations.models import Organization
 
 # 18 个权限点：module=所属模块, name=页面名, code=权限码, url=页面路径
 PERMISSIONS = [
@@ -141,7 +142,7 @@ class Command(BaseCommand):
                 "password": "edu@123",
                 "real_name": "李思雨",
                 "role": teacher_role,
-                "dept": "智能制造学院",
+                "organization_name": "智能制造学院",
                 "phone": "13800001234",
                 "email": "teacher@edu.com",
                 "bio": "负责智能制造专业课程教学与实训指导",
@@ -151,7 +152,7 @@ class Command(BaseCommand):
                 "password": "edu@123",
                 "real_name": "张同学",
                 "role": student_role,
-                "dept": "智能制造学院",
+                "organization_name": "智能制造学院",
                 "phone": "13900005678",
                 "email": "student@edu.com",
                 "bio": "智能制造专业2025级学生",
@@ -159,6 +160,15 @@ class Command(BaseCommand):
         ]
 
         for item in test_accounts:
+            organization = Organization.objects.filter(
+                name=item["organization_name"],
+                is_enabled=True,
+            ).first()
+            if organization is None:
+                organization = Organization.objects.create(
+                    name=item["organization_name"],
+                    org_type="学院",
+                )
             user = User.objects.filter(username=item["username"]).first()
             if user is None:
                 user = User.objects.create_user(
@@ -169,7 +179,7 @@ class Command(BaseCommand):
                     user=user,
                     real_name=item["real_name"],
                     role=item["role"],
-                    dept=item["dept"],
+                    organization=organization,
                     phone=item["phone"],
                     email=item["email"],
                     bio=item["bio"],
@@ -180,7 +190,7 @@ class Command(BaseCommand):
                     user=user,
                     real_name=item["real_name"],
                     role=item["role"],
-                    dept=item["dept"],
+                    organization=organization,
                     phone=item["phone"],
                     email=item["email"],
                     bio=item["bio"],

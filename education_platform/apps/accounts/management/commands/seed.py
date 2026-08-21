@@ -12,11 +12,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("=== 开始灌入种子数据 ===\n")
 
-        self.stdout.write("[accounts]")
-        call_command("seed_accounts")
-
-        self.stdout.write("\n[organizations]")
+        self.stdout.write("[organizations]")
         call_command("seed_organizations")
+
+        self.stdout.write("\n[accounts]")
+        call_command("seed_accounts")
 
         self.stdout.write("\n[notifications]")
         call_command("seed_notifications")

@@ -4,7 +4,7 @@ import copy
 import math
 
 from django.db import transaction
-from apps.organizations.models import College
+from apps.organizations.models import Organization
 
 from .models import (
     AbilityMap,
@@ -41,14 +41,14 @@ def normalise_legacy_tree(tree):
     return result
 
 
-def _college_from_name(name):
+def _organization_from_name(name):
     name = str(name or "").strip()
     if not name or name == "未分配学院":
         return None
-    return College.objects.filter(name=name).first()
+    return Organization.objects.filter(name=name, is_enabled=True).first()
 
 
-def _upsert_node(*, job, parent, node_type, data, origin, sort_order, college=None):
+def _upsert_node(*, job, parent, node_type, data, origin, sort_order, organization=None):
     normalized_name = normalise_node_name(data.get("name"))
     if not normalized_name:
         return None
@@ -73,7 +73,7 @@ def _upsert_node(*, job, parent, node_type, data, origin, sort_order, college=No
     else:
         node.origin = origin
     if node_type == "ability":
-        node.college = college
+        node.organization = organization
     node.save()
     return node
 
@@ -90,7 +90,7 @@ def merge_official_tree(job, tree, origin="ai"):
             data=ability_data,
             origin=origin,
             sort_order=ability_order,
-            college=_college_from_name(ability_data.get("college")),
+            organization=_organization_from_name(ability_data.get("college")),
         )
         if ability is None:
             continue
@@ -122,7 +122,7 @@ def serialize_official_tree(job):
     """用一次查询把正式节点表还原成旧前端仍可读取的 JSON 树。"""
     nodes = list(
         CapabilityNode.objects.filter(job=job)
-        .select_related("college")
+        .select_related("organization")
         .order_by("sort_order", "id")
     )
     children = {}
@@ -136,7 +136,7 @@ def serialize_official_tree(job):
         ability_item = {
             "id": ability.id,
             "name": ability.name,
-            "college": ability.college.name if ability.college else "未分配学院",
+            "college": ability.organization.name if ability.organization else "未分配学院",
             "enabled": ability.is_enabled,
             "units": [],
         }
@@ -198,7 +198,7 @@ def resolve_node_by_legacy_path(job, node_type, ability_index=None, unit_index=N
 
 
 @transaction.atomic
-def create_official_node(*, job, parent_type, name, college_name="", ability_index=None, unit_index=None):
+def create_official_node(*, job, parent_type, name, organization_name="", ability_index=None, unit_index=None):
     """按旧前端参数新增正式节点，并执行同级去重。"""
     name = str(name or "").strip()
     if not name:
@@ -207,17 +207,20 @@ def create_official_node(*, job, parent_type, name, college_name="", ability_ind
     if parent_type == "job":
         parent = None
         node_type = "ability"
-        college = College.objects.filter(name=college_name, is_enabled=True).first()
-        if college is None:
-            raise ValueError("所选学院不存在或已禁用")
+        organization = Organization.objects.filter(
+            name=organization_name,
+            is_enabled=True,
+        ).first()
+        if organization is None:
+            raise ValueError("所选组织不存在或已禁用")
     elif parent_type == "ability":
         parent = resolve_node_by_legacy_path(job, "ability", ability_index)
         node_type = "unit"
-        college = None
+        organization = None
     elif parent_type == "unit":
         parent = resolve_node_by_legacy_path(job, "unit", ability_index, unit_index)
         node_type = "point"
-        college = None
+        organization = None
     else:
         raise ValueError("父节点类型无效")
 
@@ -232,7 +235,7 @@ def create_official_node(*, job, parent_type, name, college_name="", ability_ind
         node_type=node_type,
         name=name,
         normalized_name=normalized_name,
-        college=college,
+        organization=organization,
         origin="manual",
         is_enabled=parent.is_enabled if parent else job.is_enabled,
         sort_order=sort_order,

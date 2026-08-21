@@ -1,13 +1,13 @@
 """organizations 模块对外暴露的接口（跨模块引用统一入口）"""
 
-from .models import College
+from .models import Organization
 
 
 def get_college_by_name(name):
-    """按名称查学院（capabilities 模块在用）"""
-    return College.objects.filter(name=name).first()
+    """兼容旧调用：按名称从组织机构中查学院。"""
+    return Organization.objects.filter(name=name, org_type="学院").first()
 
 
 def get_enabled_colleges():
-    """启用的学院列表"""
-    return College.objects.filter(is_enabled=True)
+    """兼容旧调用：返回启用的学院类型组织。"""
+    return Organization.objects.filter(org_type="学院", is_enabled=True)

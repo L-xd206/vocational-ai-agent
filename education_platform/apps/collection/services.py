@@ -15,7 +15,7 @@ from apps.capabilities.services import (
     refresh_ability_map_counts,
 )
 from apps.industry.models import Job
-from apps.organizations.models import College
+from apps.organizations.models import Organization
 
 from .crawlers.registry import validate_crawler_code
 from .models import (
@@ -393,11 +393,11 @@ def save_crawl_result(task, item):
     return listing, created
 
 
-def _college_from_name(name):
+def _organization_from_name(name):
     name = str(name or "").strip()
     if not name or name == "未分配学院":
         return None
-    return College.objects.filter(name=name).first()
+    return Organization.objects.filter(name=name, is_enabled=True).first()
 
 
 def _match_official_node(job, parent, node_type, name):
@@ -564,7 +564,7 @@ def create_analysis_batch(job, tree, *, crawl_task=None, raw_ai_output="", model
         parent_candidate,
         parent_official,
         order,
-        college=None,
+        organization=None,
         matched_override=None,
     ):
         matched = matched_override or _match_official_node(
@@ -577,7 +577,7 @@ def create_analysis_batch(job, tree, *, crawl_task=None, raw_ai_output="", model
             name=str(data.get("name") or "").strip(),
             normalized_name=normalise_node_name(data.get("name")),
             matched_node=matched,
-            college=college,
+            organization=organization,
             decision_status="not_required" if matched else "pending",
             evidence_json=normalise_evidence(data.get("evidence")),
             sort_order=order,
@@ -585,9 +585,9 @@ def create_analysis_batch(job, tree, *, crawl_task=None, raw_ai_output="", model
         return candidate, matched
 
     for ability_order, ability_data in enumerate(normalized_tree):
-        college = _college_from_name(ability_data.get("college"))
+        organization = _organization_from_name(ability_data.get("college"))
         ability_candidate, ability_match = add_candidate(
-            ability_data, "ability", None, None, ability_order, college
+            ability_data, "ability", None, None, ability_order, organization
         )
         for unit_order, unit_data in enumerate(ability_data.get("units", [])):
             unit_match = _match_official_node(
@@ -642,7 +642,7 @@ def serialize_analysis_tree(batch, *, decision_status=None):
         analysis_requirement_records(batch.crawl_task)
         if batch.crawl_task_id else []
     )
-    queryset = batch.nodes.select_related("matched_node", "college").order_by("sort_order", "id")
+    queryset = batch.nodes.select_related("matched_node", "organization").order_by("sort_order", "id")
     if decision_status:
         queryset = queryset.filter(decision_status=decision_status)
     nodes = list(queryset)
@@ -684,7 +684,7 @@ def serialize_analysis_tree(batch, *, decision_status=None):
             "children": child_items,
         }
         if node.node_type == "ability":
-            payload["college"] = node.college.name if node.college else "未分配学院"
+            payload["college"] = node.organization.name if node.organization else "未分配学院"
         return payload
 
     result = []
@@ -778,7 +778,7 @@ def serialize_pending_analysis_batches(batches):
             "children": [item(child) for child in children.get(path, [])],
         }
         if node.node_type == "ability":
-            payload["college"] = node.college.name if node.college else "未分配学院"
+            payload["college"] = node.organization.name if node.organization else "未分配学院"
         return payload
 
     return [item(path) for path in children.get((), [])]
@@ -791,7 +791,7 @@ def serialize_rejected_tree(batch):
         if batch.crawl_task_id else []
     )
     nodes = list(
-        batch.nodes.select_related("matched_node", "college")
+        batch.nodes.select_related("matched_node", "organization")
         .order_by("sort_order", "id")
     )
     node_map = {node.id: node for node in nodes}
@@ -910,7 +910,7 @@ def adopt_analysis_node(node):
             node_type=node.node_type,
             name=node.name,
             normalized_name=node.normalized_name,
-            college=node.college if node.node_type == "ability" else None,
+            organization=node.organization if node.node_type == "ability" else None,
             origin="ai",
             is_enabled=parent.is_enabled if parent else node.batch.job.is_enabled,
             sort_order=CapabilityNode.objects.filter(job=node.batch.job, parent=parent).count(),
@@ -962,7 +962,7 @@ def _find_or_copy_candidate_node(source, target_batch, parent):
         node_type=source.node_type,
         name=source.name,
         matched_node=source.matched_node,
-        college=source.college,
+        organization=source.organization,
         decision_status=("not_required" if source.matched_node_id else "pending"),
         evidence_json=source.evidence_json,
         sort_order=AnalysisNode.objects.filter(batch=target_batch, parent=parent).count(),

@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.test import Client
 
+from apps.organizations.models import Organization
+
 from .models import Permission, Role, UserProfile
 
 User = get_user_model()
@@ -76,10 +78,11 @@ class UsersTest(TestCase):
     def setUpTestData(cls):
         cls.role_a = Role.objects.create(name="教师")
         cls.role_b = Role.objects.create(name="学生")
+        cls.organization = Organization.objects.create(name="智能制造学院", org_type="学院")
         u1 = User.objects.create_user(username="teacher01", password="edu@123")
-        UserProfile.objects.create(user=u1, real_name="李思雨", phone="13800001234", dept="智能制造学院", role=cls.role_a)
+        UserProfile.objects.create(user=u1, real_name="李思雨", phone="13800001234", organization=cls.organization, role=cls.role_a)
         u2 = User.objects.create_user(username="student01", password="edu@123")
-        UserProfile.objects.create(user=u2, real_name="张同学", phone="13900005678", dept="智能制造学院", role=cls.role_b)
+        UserProfile.objects.create(user=u2, real_name="张同学", phone="13900005678", organization=cls.organization, role=cls.role_b)
         # 第三个：无资料卡的用户（边界 case）
         User.objects.create_user(username="no_profile", password="edu@123")
 
@@ -128,7 +131,7 @@ class UsersTest(TestCase):
             "username": "newuser",
             "real_name": "新用户",
             "role_id": self.role_a.id,
-            "dept": "测试部",
+            "organization_id": self.organization.id,
             "phone": "13000000000",
         }), content_type="application/json")
         self.assertEqual(r.status_code, 201)
@@ -153,15 +156,17 @@ class UsersTest(TestCase):
 
     def test_edit_ok(self):
         target = User.objects.get(username="teacher01")
+        organization = Organization.objects.create(name="新部门", org_type="部门")
         r = self.c.patch(f"/api/users/{target.pk}", data=json.dumps({
             "real_name": "李思雨改",
-            "dept": "新部门",
+            "organization_id": organization.id,
         }), content_type="application/json")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["user"]["real_name"], "李思雨改")
         # 数据库也改了
         target.refresh_from_db()
         self.assertEqual(target.profile.real_name, "李思雨改")
+        self.assertEqual(target.profile.organization, organization)
 
     def test_edit_not_found(self):
         r = self.c.patch("/api/users/99999", data=json.dumps({"real_name": "x"}), content_type="application/json")
@@ -198,6 +203,8 @@ class UserJourneyTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.role = Role.objects.create(name="管理员")
+        cls.organization = Organization.objects.create(name="测试部门", org_type="部门")
+        cls.new_organization = Organization.objects.create(name="新部门", org_type="部门")
         cls.admin_user = User.objects.create_user(username="admin", password="admin123")
         cls.admin_user.is_staff = True
         cls.admin_user.save()
@@ -269,7 +276,7 @@ class UserJourneyTest(TestCase):
             "username": "journey_test",
             "real_name": "流程测试",
             "role_id": self.role.id,
-            "dept": "测试部门",
+            "organization_id": self.organization.id,
             "phone": "13100000000",
             "email": "test@journey.com",
         }), content_type="application/json")
@@ -285,7 +292,7 @@ class UserJourneyTest(TestCase):
 
         # 5. 点"编辑"，改姓名和部门
         r = self.c.patch(f"/api/users/{new_id}", data=json.dumps({
-            "real_name": "流程测试改", "dept": "新部门",
+            "real_name": "流程测试改", "organization_id": self.new_organization.id,
         }), content_type="application/json")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["user"]["real_name"], "流程测试改")
@@ -449,7 +456,8 @@ class ProfileTest(TestCase):
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="profiletest", password="edu@123")
         role = Role.objects.create(name="测试角色")
-        UserProfile.objects.create(user=cls.user, real_name="测试用户", phone="13800001111", dept="测试部", email="test@test.com", bio="个人说明", role=role)
+        cls.organization = Organization.objects.create(name="测试部", org_type="部门")
+        UserProfile.objects.create(user=cls.user, real_name="测试用户", phone="13800001111", organization=cls.organization, email="test@test.com", bio="个人说明", role=role)
 
     def setUp(self):
         self.c = Client()
@@ -463,9 +471,11 @@ class ProfileTest(TestCase):
         self.assertEqual(d["profile"]["phone"], "13800001111")
 
     def test_patch_profile(self):
-        r = self.c.patch("/api/profile", data=json.dumps({"real_name": "改过", "dept": "新部门"}), content_type="application/json")
+        r = self.c.patch("/api/profile", data=json.dumps({"real_name": "改过"}), content_type="application/json")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["profile"]["real_name"], "改过")
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.organization, self.organization)
 
     def test_avatar(self):
         r = self.c.patch("/api/profile/avatar", data=json.dumps({"avatar": "data:image/png;base64,xxx"}), content_type="application/json")

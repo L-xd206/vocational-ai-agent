@@ -137,7 +137,8 @@
         <div class="form-item">
           <label class="form-label">所属部门</label>
           <div class="tree-select" id="deptWrap">
-            <input class="field" id="formDeptInput" placeholder="点击选择所属部门" autocomplete="off" onclick="toggleDeptSelect()" oninput="filterDeptSelect()">
+            <input type="hidden" id="formOrganizationId">
+            <input class="field" id="formDeptInput" placeholder="点击选择所属部门" autocomplete="off" readonly onclick="toggleDeptSelect()">
             <div class="tree-dropdown" id="deptDropdown">
               <div class="tree-list" id="deptTreeList"></div>
             </div>
@@ -191,7 +192,7 @@
     function renderDeptNodes(nodes) {
       return nodes.map(n => `
         <div class="tree-node" data-name="${escapeAttr(n.name)}">
-          <div class="node-label" onclick="selectDeptNode('${escapeAttr(n.name)}')">
+          <div class="node-label" onclick="selectDeptNode(${n.id}, '${escapeAttr(n.name)}')">
             <span class="arrow">${n.children.length?'&#9654;':''}</span>
             <span>${escapeHtml(n.name)}</span>
           </div>
@@ -212,7 +213,8 @@
       else { refreshDeptTree(); dd.classList.add('show'); }
     }
 
-    function selectDeptNode(name) {
+    function selectDeptNode(id, name) {
+      document.getElementById('formOrganizationId').value = id;
       document.getElementById('formDeptInput').value = name;
       document.getElementById('deptDropdown').classList.remove('show');
       document.querySelectorAll('#deptTreeList .tree-node').forEach(n => n.classList.remove('hidden'));
@@ -330,12 +332,14 @@
         document.getElementById('formRealName').value = u.real_name || '';
         document.getElementById('formUsername').value = u.username;
         document.getElementById('formRole').value = u.role ? u.role.id : '';
+        document.getElementById('formOrganizationId').value = u.organization_id || '';
         document.getElementById('formDeptInput').value = u.dept || '';
         document.getElementById('formPhone').value = u.phone || '';
         document.getElementById('formEmail').value = u.email || '';
       } else {
         ['formRealName','formUsername','formPhone','formEmail'].forEach(id => document.getElementById(id).value='');
         document.getElementById('formDeptInput').value = '';
+        document.getElementById('formOrganizationId').value = '';
         document.getElementById('formUsername').disabled = false;
         document.getElementById('formRole').value = '';
       }
@@ -352,11 +356,11 @@
       if (!username) return showToast('请输入账号');
       if (!realName) return showToast('请输入姓名');
       if (!roleId) return showToast('请选择角色');
-      const payload = { username, real_name: realName, role_id: roleId || null, dept: document.getElementById('formDeptInput').value.trim(), phone: document.getElementById('formPhone').value.trim(), email: document.getElementById('formEmail').value.trim() };
+      const payload = { username, real_name: realName, role_id: roleId || null, organization_id: document.getElementById('formOrganizationId').value || null, phone: document.getElementById('formPhone').value.trim(), email: document.getElementById('formEmail').value.trim() };
       try {
         let r;
         if (editingUserId) {
-          r = await fetch(`/api/users/${editingUserId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify({real_name:payload.real_name,role_id:payload.role_id,dept:payload.dept,phone:payload.phone,email:payload.email}) });
+          r = await fetch(`/api/users/${editingUserId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify({real_name:payload.real_name,role_id:payload.role_id,organization_id:payload.organization_id,phone:payload.phone,email:payload.email}) });
         } else {
           r = await fetch('/api/users', { method:'POST', headers:jsonHeaders(), body:JSON.stringify(payload) });
         }

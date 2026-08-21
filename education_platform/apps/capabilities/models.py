@@ -203,10 +203,10 @@ class CapabilityNode(models.Model):
     node_type = models.CharField("节点类型", max_length=20, choices=NODE_TYPES)
     name = models.CharField("节点名称", max_length=200)
     normalized_name = models.CharField("标准化名称", max_length=200, editable=False)
-    college = models.ForeignKey(
-        "organizations.College", on_delete=models.SET_NULL,
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.SET_NULL,
         related_name="capability_nodes", null=True, blank=True,
-        verbose_name="所属学院",
+        verbose_name="所属组织",
     )
     origin = models.CharField(
         "节点来源", max_length=20, choices=ORIGIN_TYPES, default="manual",

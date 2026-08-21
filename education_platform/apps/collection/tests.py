@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.capabilities.services import merge_official_tree
 from apps.industry.models import Chain, Job
-from apps.organizations.models import College
+from apps.organizations.models import Organization
 
 from .models import AnalysisBatch, AnalysisNode, CrawlSource, CrawlTask, JobListing
 from .services import (
@@ -825,7 +825,10 @@ class CandidateAnalysisServicesTests(TestCase):
             name="工业机器人操作员",
             search_keywords=["工业机器人操作员", "机器人调试", "机器人运维"],
         )
-        self.college = College.objects.create(name="候选分析测试学院")
+        self.college = Organization.objects.create(
+            name="候选分析测试学院",
+            org_type="学院",
+        )
 
     def test_candidate_match_and_adopt(self):
         merge_official_tree(self.job, [{

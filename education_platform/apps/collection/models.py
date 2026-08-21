@@ -292,13 +292,13 @@ class AnalysisNode(models.Model):
         blank=True,
         verbose_name="匹配的正式能力节点",
     )
-    college = models.ForeignKey(
-        "organizations.College",
+    organization = models.ForeignKey(
+        "organizations.Organization",
         on_delete=models.SET_NULL,
         related_name="analysis_nodes",
         null=True,
         blank=True,
-        verbose_name="建议所属学院",
+        verbose_name="建议所属组织",
     )
     decision_status = models.CharField(
         "处理状态",

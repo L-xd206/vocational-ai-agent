@@ -62,7 +62,14 @@ class UserProfile(models.Model):
         verbose_name="角色",
     )
     real_name = models.CharField("姓名", max_length=50, blank=True)
-    dept = models.CharField("所属部门", max_length=100, blank=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="user_profiles",
+        verbose_name="所属组织",
+    )
     phone = models.CharField("手机号", max_length=20, blank=True)
     email = models.CharField("邮箱", max_length=100, blank=True)
     bio = models.TextField("个人说明", blank=True)

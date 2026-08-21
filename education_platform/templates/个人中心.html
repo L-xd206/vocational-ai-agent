@@ -190,6 +190,8 @@
       editing = !editing;
       const fields = document.querySelectorAll('.profile-field');
       fields.forEach(f => f.readOnly = !editing);
+      // 所属组织决定数据权限，只能由用户管理页面调整。
+      document.getElementById('deptName').readOnly = true;
       document.getElementById('editProfileBtn').textContent = editing ? '保存资料' : '编辑资料';
       if (!editing) saveProfile();
     }
@@ -197,7 +199,6 @@
     async function saveProfile() {
       const payload = {
         real_name: document.getElementById('realName').value.trim(),
-        dept: document.getElementById('deptName').value.trim(),
         phone: document.getElementById('profilePhone').value.trim(),
         email: document.getElementById('profileEmail').value.trim(),
         bio: document.getElementById('profileBio').value.trim(),

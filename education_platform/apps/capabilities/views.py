@@ -246,7 +246,7 @@ def api_ability_node_add(request):
             job=job,
             parent_type=parent_type,
             name=name,
-            college_name=college,
+            organization_name=college,
             ability_index=data.get("ability_index"),
             unit_index=data.get("unit_index"),
         )

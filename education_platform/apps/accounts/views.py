@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import Permission, Role, UserProfile
 from apps.notifications.api import write_system_log
+from apps.organizations.models import Organization
 
 User = get_user_model()
 
@@ -18,12 +19,19 @@ def user_to_dict(user):
     """将 User + UserProfile 转为前端字典（共用：列表/me/成员弹窗/profile）"""
     profile = getattr(user, "profile", None)
     role = profile.role if profile else None
+    organization = profile.organization if profile else None
     return {
         "id": user.id,
         "username": user.username,
         "real_name": profile.real_name if profile and profile.real_name else user.username,
         "role": {"id": role.id, "name": role.name} if role else None,
-        "dept": profile.dept if profile else "",
+        "organization": (
+            {"id": organization.id, "name": organization.name}
+            if organization else None
+        ),
+        "organization_id": organization.id if organization else None,
+        # 暂时保留展示键，兼容角色成员弹窗等旧前端；数据库不再保存 dept 文本。
+        "dept": organization.name if organization else "",
         "phone": profile.phone if profile else "",
         "email": profile.email if profile else "",
         "avatar": profile.avatar if profile else "",
@@ -145,7 +153,7 @@ def api_users(request):
     page = int(request.GET.get("page", 1) or 1)
     page_size = int(request.GET.get("page_size", 10) or 10)
 
-    queryset = User.objects.select_related("profile__role").all()
+    queryset = User.objects.select_related("profile__role", "profile__organization").all()
     # 搜索：姓名、账号、手机号
     if keyword:
         queryset = queryset.filter(
@@ -185,6 +193,13 @@ def api_user_create(request):
     role = Role.objects.filter(pk=role_id).first()
     if role is None:
         return JsonResponse({"error": "角色不存在"}, status=400)
+    organization_id = data.get("organization_id") or None
+    organization = (
+        Organization.objects.filter(pk=organization_id, is_enabled=True).first()
+        if organization_id else None
+    )
+    if organization_id and organization is None:
+        return JsonResponse({"error": "所选组织不存在或已停用"}, status=400)
     user = User.objects.create_user(
         username=username,
         password="edu@123",
@@ -192,7 +207,7 @@ def api_user_create(request):
     UserProfile.objects.create(
         user=user,
         real_name=data.get("real_name", "").strip(),
-        dept=data.get("dept", "").strip(),
+        organization=organization,
         phone=data.get("phone", "").strip(),
         email=data.get("email", "").strip(),
         role=role,
@@ -213,7 +228,9 @@ def api_user_detail(request, user_id):
         return JsonResponse({"ok": True})
     # GET：详情
     if request.method == "GET":
-        target = User.objects.filter(pk=user_id).select_related("profile__role").first()
+        target = User.objects.filter(pk=user_id).select_related(
+            "profile__role", "profile__organization"
+        ).first()
         if target is None:
             return JsonResponse({"error": "用户不存在"}, status=404)
         return JsonResponse({"ok": True, "user": user_to_dict(target)})
@@ -224,15 +241,26 @@ def api_user_detail(request, user_id):
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({"error": "无效的 JSON"}, status=400)
-    target = User.objects.filter(pk=user_id).select_related("profile").first()
+    target = User.objects.filter(pk=user_id).select_related(
+        "profile", "profile__organization"
+    ).first()
     if target is None:
         return JsonResponse({"error": "用户不存在"}, status=404)
     profile = getattr(target, "profile", None)
     if profile is None:
         return JsonResponse({"error": "该用户无资料卡"}, status=400)
-    for field in ["real_name", "dept", "phone", "email"]:
+    for field in ["real_name", "phone", "email"]:
         if field in data:
             setattr(profile, field, data[field].strip() if isinstance(data[field], str) else data[field])
+    if "organization_id" in data:
+        organization_id = data.get("organization_id") or None
+        organization = (
+            Organization.objects.filter(pk=organization_id, is_enabled=True).first()
+            if organization_id else None
+        )
+        if organization_id and organization is None:
+            return JsonResponse({"error": "所选组织不存在或已停用"}, status=400)
+        profile.organization = organization
     if "role_id" in data:
         role_id = data["role_id"] or None
         profile.role = Role.objects.filter(pk=role_id).first() if role_id else None
@@ -362,13 +390,13 @@ def api_role_members(request, role_id):
     if role is None:
         return JsonResponse({"error": "角色不存在"}, status=404)
     members = []
-    for profile in role.members.select_related("user").all():
+    for profile in role.members.select_related("user", "organization").all():
         u = profile.user
         members.append({
             "id": u.id,
             "username": u.username,
             "real_name": profile.real_name or u.username,
-            "dept": profile.dept or "",
+            "dept": profile.organization.name if profile.organization else "",
             "phone": profile.phone or "",
         })
     return JsonResponse({"ok": True, "members": members})
@@ -386,7 +414,8 @@ def api_profile(request):
         profile = getattr(request.user, "profile", None)
         if profile is None:
             return JsonResponse({"error": "无资料卡"}, status=400)
-        for field in ["real_name", "dept", "phone", "email", "bio"]:
+        # 所属组织决定数据权限，只允许管理员在用户管理页面修改。
+        for field in ["real_name", "phone", "email", "bio"]:
             if field in data:
                 setattr(profile, field, data[field].strip() if isinstance(data[field], str) else data[field])
         profile.save()

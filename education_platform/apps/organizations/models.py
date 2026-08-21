@@ -2,27 +2,6 @@ from django.conf import settings
 from django.db import models
 
 
-class College(models.Model):
-    """岗位能力下发目标学院。capabilities 模块依赖，保留不动。"""
-    name = models.CharField("学院名称", max_length=100, unique=True)
-    org = models.ForeignKey(
-        "Organization", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="linked_colleges", verbose_name="关联机构",
-    )
-    is_enabled = models.BooleanField("是否启用", default=True)
-    sort_order = models.PositiveIntegerField("排序", default=0)
-    created_at = models.DateTimeField("创建时间", auto_now_add=True)
-
-    class Meta:
-        db_table = "organization_college"
-        ordering = ["sort_order", "id"]
-        verbose_name = "学院"
-        verbose_name_plural = verbose_name
-
-    def __str__(self):
-        return self.name
-
-
 class Organization(models.Model):
     """组织机构（树形，自引用）。"""
     name = models.CharField("机构名称", max_length=100)

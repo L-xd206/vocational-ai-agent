@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from django.db.models import Q
 
-from .models import Class, College, Organization, Student
+from .models import Class, Organization, Student
 
 
 def page_org_chart(request):
@@ -22,7 +22,11 @@ def page_student_list(request):
 
 
 def api_college_list(request):
-    colleges = College.objects.filter(is_enabled=True).values("id", "name")
+    """兼容能力图谱旧接口：学院选项直接来源于组织机构表。"""
+    colleges = Organization.objects.filter(
+        org_type="学院",
+        is_enabled=True,
+    ).values("id", "name")
     return JsonResponse({"colleges": list(colleges)})
 
 

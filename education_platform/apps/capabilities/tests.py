@@ -5,7 +5,7 @@ from django.test import TestCase
 from ai.capability_generation import build_prompt
 
 from apps.industry.models import Chain, Job
-from apps.organizations.models import College
+from apps.organizations.models import Organization
 
 from .models import CapabilityNode, parse_abilities_to_tree
 from .services import (
@@ -22,7 +22,10 @@ class CapabilityNodeServicesTests(TestCase):
             name="工业机器人操作员",
             search_keywords=["工业机器人操作员", "机器人调试", "机器人运维"],
         )
-        self.college = College.objects.create(name="测试智能制造学院")
+        self.college = Organization.objects.create(
+            name="测试智能制造学院",
+            org_type="学院",
+        )
 
     def test_legacy_tree_is_migrated_to_three_node_levels(self):
         merge_official_tree(self.job, [{

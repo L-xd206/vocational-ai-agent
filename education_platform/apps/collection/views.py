@@ -269,7 +269,7 @@ def api_latest_analysis_trees(request):
         AnalysisBatch.objects.select_related("crawl_task")
         .prefetch_related(Prefetch(
             "nodes",
-            queryset=AnalysisNode.objects.select_related("college").order_by("sort_order", "id"),
+            queryset=AnalysisNode.objects.select_related("organization").order_by("sort_order", "id"),
         ))
         .order_by("-created_at", "-id")
     )
@@ -350,7 +350,7 @@ def api_analysis_node_reject(request, node_id):
 def api_analysis_node_restore(request, node_id):
     try:
         node = AnalysisNode.objects.select_related(
-            "batch__job", "parent", "matched_node", "college"
+            "batch__job", "parent", "matched_node", "organization"
         ).get(id=node_id)
         restored, batch = restore_rejected_node(node)
         return JsonResponse({
