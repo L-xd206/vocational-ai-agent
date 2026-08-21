@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -105,3 +107,55 @@ class CourseTreeModelTests(TestCase):
         self.tree.owner = other_owner
         with self.assertRaises(ValidationError):
             self.tree.full_clean()
+
+    def test_dispatch_creates_pending_course_tree_with_snapshot(self):
+        self.tree.delete()
+        self.client.login(username="course_owner", password="edu@123")
+        response = self.client.post(
+            "/api/curriculum/dispatch",
+            data=json.dumps({
+                "job_id": self.ability.job_id,
+                "ability_ids": [self.ability.id],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["created_count"], 1)
+        dispatched = CourseTree.objects.get(
+            organization=self.organization,
+            source_ability=self.ability,
+        )
+        self.assertIsNone(dispatched.textbook)
+        self.assertEqual(dispatched.source_snapshot["units"][0]["id"], self.unit.id)
+        self.assertEqual(
+            dispatched.source_snapshot["units"][0]["children"][0]["id"],
+            self.point.id,
+        )
+
+    def test_duplicate_dispatch_is_skipped(self):
+        self.tree.delete()
+        self.client.login(username="course_owner", password="edu@123")
+        payload = json.dumps({
+            "job_id": self.ability.job_id,
+            "ability_ids": [self.ability.id],
+        })
+        first = self.client.post("/api/curriculum/dispatch", data=payload, content_type="application/json")
+        second = self.client.post("/api/curriculum/dispatch", data=payload, content_type="application/json")
+        self.assertEqual(first.json()["created_count"], 1)
+        self.assertEqual(second.json()["created_count"], 0)
+        self.assertEqual(second.json()["skipped_count"], 1)
+
+    def test_unassigned_ability_cannot_be_dispatched(self):
+        self.ability.organization = None
+        self.ability.save(update_fields=["organization", "updated_at"])
+        self.client.login(username="course_owner", password="edu@123")
+        response = self.client.post(
+            "/api/curriculum/dispatch",
+            data=json.dumps({
+                "job_id": self.ability.job_id,
+                "ability_ids": [self.ability.id],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("未分配学院", response.json()["error"])

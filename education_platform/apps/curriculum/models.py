@@ -22,6 +22,8 @@ class CourseTree(models.Model):
     textbook = models.ForeignKey(
         "resources.Textbook",
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="course_trees",
         verbose_name="对应教材",
     )

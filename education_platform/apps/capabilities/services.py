@@ -137,6 +137,7 @@ def serialize_official_tree(job):
             "id": ability.id,
             "name": ability.name,
             "college": ability.organization.name if ability.organization else "未分配学院",
+            "organization_id": ability.organization_id,
             "enabled": ability.is_enabled,
             "units": [],
         }

@@ -10,5 +10,6 @@ urlpatterns = [
     path("api/ability/<int:job_id>/text", views.api_ability_text, name="ability-text"),
     path("api/ability/node/toggle", views.api_ability_node_toggle, name="ability-node-toggle"),
     path("api/ability/node/add", views.api_ability_node_add, name="ability-node-add"),
+    path("api/ability/node/organization", views.api_ability_node_organization, name="ability-node-organization"),
     path("api/ability/<int:job_id>/review", views.api_ability_review, name="ability-review"),
 ]

@@ -8,6 +8,7 @@ from django.views.decorators.http import require_http_methods
 from apps.industry.models import Job, Chain
 from apps.collection.models import CrawlTask
 from apps.collection.services import MIN_VALID_LISTINGS, data_quality, valid_requirements
+from apps.organizations.models import Organization
 from .models import AbilityMap, CapabilityNode, parse_abilities_to_tree
 from .services import (
     create_official_node,
@@ -260,6 +261,46 @@ def api_ability_node_add(request):
         return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_ability_node_organization(request):
+    """修改正式岗位能力节点的所属学院。"""
+    try:
+        data = json.loads(request.body or "{}")
+        node_id = int(data.get("node_id"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"error": "岗位能力参数无效"}, status=400)
+
+    node = CapabilityNode.objects.filter(
+        pk=node_id,
+        node_type="ability",
+        parent__isnull=True,
+    ).first()
+    if node is None:
+        return JsonResponse({"error": "岗位能力节点不存在"}, status=404)
+
+    organization_id = data.get("organization_id") or None
+    if organization_id is None:
+        node.organization = None
+    else:
+        organization = Organization.objects.filter(
+            pk=organization_id,
+            org_type="学院",
+            is_enabled=True,
+        ).first()
+        if organization is None:
+            return JsonResponse({"error": "所属学院不存在或已停用"}, status=400)
+        node.organization = organization
+    node.save(update_fields=["organization", "updated_at"])
+    return JsonResponse({
+        "ok": True,
+        "node_id": node.id,
+        "organization_id": node.organization_id,
+        "college": node.organization.name if node.organization else "未分配学院",
+        "abilities": serialize_official_tree(node.job),
+    })
 
 
 @csrf_exempt

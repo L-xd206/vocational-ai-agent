@@ -43,6 +43,7 @@ class CapabilityNodeServicesTests(TestCase):
         tree = serialize_official_tree(self.job)
         self.assertEqual(tree[0]["name"], "机器人系统调试")
         self.assertEqual(tree[0]["college"], self.college.name)
+        self.assertEqual(tree[0]["organization_id"], self.college.id)
 
     def test_ai_prompt_contains_official_tree_json(self):
         official_tree = [{
@@ -95,3 +96,19 @@ class CapabilityNodeServicesTests(TestCase):
         point = tree[0]["units"][0]["children"][0]
         self.assertEqual(point["name"], "关节润滑")
         self.assertEqual(point["assessment"], "润滑结果符合规范")
+
+    def test_ability_organization_can_be_updated(self):
+        ability = CapabilityNode.objects.create(
+            job=self.job,
+            node_type="ability",
+            name="机器人现场操作",
+        )
+        response = self.client.post(
+            "/api/ability/node/organization",
+            data=json.dumps({"node_id": ability.id, "organization_id": self.college.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        ability.refresh_from_db()
+        self.assertEqual(ability.organization, self.college)
+        self.assertEqual(response.json()["college"], self.college.name)
