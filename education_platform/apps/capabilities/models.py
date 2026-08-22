@@ -208,6 +208,12 @@ class CapabilityNode(models.Model):
         related_name="capability_nodes", null=True, blank=True,
         verbose_name="所属组织",
     )
+    course_matches = models.JSONField(
+        "匹配课程",
+        default=list,
+        blank=True,
+        help_text="匹配课程列表，例如：[{\"course_name\": \"数控加工工艺\", \"matched_content\": \"工序划分\"}]。",
+    )
     origin = models.CharField(
         "节点来源", max_length=20, choices=ORIGIN_TYPES, default="manual",
     )

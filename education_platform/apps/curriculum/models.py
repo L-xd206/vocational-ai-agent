@@ -60,6 +60,28 @@ class CourseTree(models.Model):
     )
     is_published = models.BooleanField("是否发布", default=False)
     published_at = models.DateTimeField("发布时间", null=True, blank=True)
+    ai_generation_status = models.CharField(
+        "AI 生成状态",
+        max_length=20,
+        choices=[
+            ("pending", "待生成"),
+            ("processing", "生成中"),
+            ("ready", "已生成"),
+            ("error", "生成失败"),
+        ],
+        default="pending",
+    )
+    ai_generation_error = models.TextField("AI 生成失败原因", blank=True)
+    has_manual_edits = models.BooleanField(
+        "是否包含人工编辑成果",
+        default=False,
+        help_text="课程基础信息、任务卡、教学资源或试题被人工修改后置为 True，用于阻止 AI 重新生成时覆盖成果。",
+    )
+    has_unpublished_changes = models.BooleanField(
+        "是否存在发布后更新",
+        default=False,
+        help_text="课程发布后发生内容修改时置为 True，再次发布成功后清零。",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -151,6 +173,16 @@ class CourseTreeNode(models.Model):
     safety_points = models.JSONField("安全要点", default=list, blank=True)
     resource_links = models.JSONField("教学资源", default=list, blank=True)
     is_edited = models.BooleanField("是否编辑完成", default=False)
+    chapter_content_edited = models.BooleanField(
+        "学习任务内容是否编辑完成",
+        default=False,
+        help_text="仅用于章节点，区分学习任务本身是否确认与其下任务卡是否全部完成。",
+    )
+    changed_since_publish = models.BooleanField(
+        "发布后是否修改",
+        default=False,
+        help_text="用于在课程树中标识本节点包含尚未重新发布的修改。",
+    )
     sort_order = models.PositiveIntegerField("同级排序", default=0)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)

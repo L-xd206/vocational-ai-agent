@@ -75,6 +75,7 @@
     .node-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
     .node-title { overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:800; color:#27364e; }
     .node-meta { font-size:12px; color:#8d9bb0; font-weight:600; }
+    .course-match-meta { overflow:hidden; text-overflow:ellipsis; font-size:12px; color:#a1a9b8; font-weight:600; }
     .mini-btn, .view-btn { height:28px; padding:0 10px; border-radius:8px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; flex-shrink:0; transition:.18s ease; }
     .mini-btn { border:1px solid #dfe7f2; background:#fbfdff; color:#5a6a85; }
     .mini-btn:hover { border-color:var(--tone); color:var(--tone); }
@@ -332,6 +333,14 @@ function getUnits(abilityItem) {
   for (let i = 0; i < points.length; i += size) units.push({name:`能力单元 ${units.length + 1}`, enabled:true, children:points.slice(i, i + size)});
   return units;
 }
+function courseMatchNames(abilityItem) {
+  const matches = Array.isArray(abilityItem?.course_matches) ? abilityItem.course_matches : [];
+  return [...new Set(matches.map(item => String(item?.course_name || '').trim()).filter(Boolean))];
+}
+function courseMatchMeta(abilityItem) {
+  const names = courseMatchNames(abilityItem);
+  return names.length ? `<span class="course-match-meta">对应课程：${esc(names.join('、'))}</span>` : '';
+}
 
 function updateAbilityData(jobId, tree) {
   let record = abilities.find(item => item.job_id === jobId);
@@ -534,7 +543,7 @@ function renderLevel1(expandedState = null) {
         abData.forEach((ab, ai) => {
           abilityHtml += `<div class="node-card expanded${nodeClass(enabledValue(ab))}" data-node="ability-${j.id}-${ai}" data-parent="${nodeId}" data-type="ability" style="--tone:var(--orange);--tone-soft:var(--orange-soft);">
             <span class="node-dot"></span>
-            <div class="node-main"><span class="node-title">${esc(ab.name)}</span><span class="node-meta">${esc(ab.college || '未分配学院')} · ${getUnits(ab).reduce((n,u) => n + (u.children||[]).length, 0)}个知识点/技能点</span></div>
+            <div class="node-main"><span class="node-title">${esc(ab.name)}</span><span class="node-meta">${esc(ab.college || '未分配学院')} · ${getUnits(ab).reduce((n,u) => n + (u.children||[]).length, 0)}个知识点/技能点</span>${courseMatchMeta(ab)}</div>
             ${statusButton(enabledValue(ab), `toggleNodeStatus('ability',null,${j.id},${ai},null,null,${enabledValue(ab)})`)}
             <button class="add-node-btn" onclick="addNode('ability',${j.id},${ai})" title="新增能力单元">＋</button>
             <button class="view-btn" onclick="drillToLevel2(${j.id},'${escAttr(j.name)}','${escAttr(ab.name)}')">查看</button>
@@ -690,7 +699,7 @@ function renderLevel2(ab, name, abilityFilter, expandedState = null) {
     rootCard.innerHTML = `
       <button class="toggle-btn" onclick="toggleNode2('${rootId}')">›</button>
       <span class="node-dot"></span>
-      <div class="node-main"><span class="node-title">${esc(abilityItem.name)}</span><span class="node-meta">${esc(abilityItem.college || '未分配学院')} · ${skills.length}个知识点/技能点</span></div>
+      <div class="node-main"><span class="node-title">${esc(abilityItem.name)}</span><span class="node-meta">${esc(abilityItem.college || '未分配学院')} · ${skills.length}个知识点/技能点</span>${courseMatchMeta(abilityItem)}</div>
       ${statusButton(enabledValue(abilityItem), `toggleNodeStatus('ability',null,${ab.job_id},${ai},null,null,${enabledValue(abilityItem)})`)}
       <button class="mini-btn" onclick="openAbilityOrganizationModal(${ab.job_id},${ai})">学院</button>
       <button class="add-node-btn" onclick="addNode('ability',${ab.job_id},${ai})" title="新增能力单元">＋</button>`;

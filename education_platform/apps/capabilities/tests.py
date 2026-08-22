@@ -44,6 +44,23 @@ class CapabilityNodeServicesTests(TestCase):
         self.assertEqual(tree[0]["name"], "机器人系统调试")
         self.assertEqual(tree[0]["college"], self.college.name)
         self.assertEqual(tree[0]["organization_id"], self.college.id)
+        self.assertEqual(tree[0]["course_matches"], [])
+
+    def test_serialized_tree_includes_course_matches(self):
+        ability = CapabilityNode.objects.create(
+            job=self.job,
+            node_type="ability",
+            name="加工准备与工程识图",
+            course_matches=[{
+                "course_name": "数控加工工艺与编程",
+                "matched_content": "工艺规程与夹具选择",
+            }],
+        )
+
+        tree = serialize_official_tree(self.job)
+
+        self.assertEqual(tree[0]["id"], ability.id)
+        self.assertEqual(tree[0]["course_matches"][0]["course_name"], "数控加工工艺与编程")
 
     def test_ai_prompt_contains_official_tree_json(self):
         official_tree = [{

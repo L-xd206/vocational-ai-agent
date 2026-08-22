@@ -9,11 +9,12 @@ from django.db import transaction
 from apps.accounts.models import Permission, Role, UserProfile
 from apps.organizations.models import Organization
 
-# 18 个权限点：module=所属模块, name=页面名, code=权限码, url=页面路径
+# 权限点：module=所属模块, name=页面名, code=权限码, url=页面路径
 PERMISSIONS = [
     {"module": "岗位采集", "name": "岗位数据采集", "code": "job_collection", "url": "岗位数据采集.html"},
     {"module": "岗位采集", "name": "未采纳数据", "code": "rejected_data", "url": "未采纳数据.html"},
     {"module": "能力图谱", "name": "能力图谱库", "code": "capability_graph", "url": "能力图谱库.html"},
+    {"module": "能力图谱", "name": "岗位能力下发", "code": "capability_dispatch", "url": ""},
     {"module": "教师工作台", "name": "课程管理", "code": "course_manage", "url": "课程管理.html"},
     {"module": "教师工作台", "name": "教育资源库", "code": "resource_library", "url": "教育资源库.html"},
     {"module": "教师工作台", "name": "教学安排", "code": "teaching_schedule", "url": "教学安排.html"},
@@ -45,7 +46,7 @@ class Command(BaseCommand):
         ))
 
     def seed_permissions(self):
-        """预置 18 个权限点（幂等：重复跑不重复插，已存在的会更新 module/name/url）"""
+        """预置权限点（幂等：重复跑不重复插，已存在的会更新 module/name/url）"""
         with transaction.atomic():
             for item in PERMISSIONS:
                 perm, created = Permission.objects.get_or_create(code=item["code"], defaults=item)
@@ -95,7 +96,15 @@ class Command(BaseCommand):
                     self.stdout.write("admin 已完整，跳过")
 
     def seed_standard_roles(self):
-        """预置常用角色（教师、学生），各挂合理权限"""
+        """预置常用角色（含学院负责人、课程负责人），各挂合理权限。"""
+        capability_manager_role, _ = Role.objects.get_or_create(
+            name="能力图谱负责人",
+            defaults={"description": "审核正式能力树并将岗位能力下发至学院", "is_builtin": True},
+        )
+        capability_manager_role.permissions.set(Permission.objects.filter(code__in=[
+            "capability_graph", "capability_dispatch", "profile", "message",
+        ]))
+
         # 教师：教师工作台 + 学习空间 + 个人
         teacher_permissions = Permission.objects.filter(code__in=[
             "course_manage", "resource_library", "teaching_schedule", "question_bank",
@@ -111,6 +120,21 @@ class Command(BaseCommand):
             self.stdout.write("已创建角色：教师")
         else:
             self.stdout.write("角色 教师 已存在，跳过")
+
+        college_manager_role, _ = Role.objects.get_or_create(
+            name="学院负责人",
+            defaults={"description": "管理本学院下发课程并分配课程负责人", "is_builtin": True},
+        )
+        college_manager_role.permissions.set(Permission.objects.filter(code__in=[
+            "course_manage", "resource_library", "profile", "message",
+        ]))
+        course_owner_role, _ = Role.objects.get_or_create(
+            name="课程负责人",
+            defaults={"description": "编辑本人负责课程的任务卡、资源与试题", "is_builtin": True},
+        )
+        course_owner_role.permissions.set(Permission.objects.filter(code__in=[
+            "resource_library", "question_bank", "profile", "message",
+        ]))
 
         # 学生：学习空间 + 个人
         student_permissions = Permission.objects.filter(code__in=[
@@ -132,8 +156,10 @@ class Command(BaseCommand):
         User = get_user_model()
         teacher_role = Role.objects.filter(name="教师").first()
         student_role = Role.objects.filter(name="学生").first()
-        if not teacher_role or not student_role:
-            self.stdout.write("⚠ 教师/学生 角色缺失，跳过测试用户")
+        manager_role = Role.objects.filter(name="学院负责人").first()
+        course_owner_role = Role.objects.filter(name="课程负责人").first()
+        if not teacher_role or not student_role or not manager_role or not course_owner_role:
+            self.stdout.write("⚠ 必要角色缺失，跳过测试用户")
             return
 
         test_accounts = [
@@ -156,6 +182,36 @@ class Command(BaseCommand):
                 "phone": "13900005678",
                 "email": "student@edu.com",
                 "bio": "智能制造专业2025级学生",
+            },
+            {
+                "username": "college_manager",
+                "password": "edu@123",
+                "real_name": "王主任",
+                "role": manager_role,
+                "organization_name": "智能制造学院",
+                "phone": "13700001111",
+                "email": "manager@edu.com",
+                "bio": "智能制造学院课程负责人分配管理员",
+            },
+            {
+                "username": "course_owner",
+                "password": "edu@123",
+                "real_name": "刘老师",
+                "role": course_owner_role,
+                "organization_name": "智能制造学院",
+                "phone": "13600002222",
+                "email": "course.owner@edu.com",
+                "bio": "数控课程负责人",
+            },
+            {
+                "username": "course_owner_b",
+                "password": "edu@123",
+                "real_name": "陈老师",
+                "role": course_owner_role,
+                "organization_name": "智能制造学院",
+                "phone": "13500003333",
+                "email": "course.owner.b@edu.com",
+                "bio": "数控课程负责人（用于交接测试）",
             },
         ]
 
