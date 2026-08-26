@@ -115,3 +115,38 @@ class CourseQuestion(models.Model):
 
     def __str__(self):
         return f"{self.get_question_type_display()}：{self.stem[:30]}"
+
+
+class TeachingArrangement(models.Model):
+    """教学安排：某教师在某学期为某课程树授课，覆盖若干班级。"""
+
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="teaching_arrangements",
+        verbose_name="授课教师",
+    )
+    course_tree = models.ForeignKey(
+        "curriculum.CourseTree",
+        on_delete=models.CASCADE,
+        related_name="teaching_arrangements",
+        verbose_name="教学课程",
+    )
+    semester = models.CharField("学期", max_length=20)
+    classes = models.ManyToManyField(
+        "organizations.Class",
+        related_name="teaching_arrangements",
+        verbose_name="授课班级",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        db_table = "teaching_arrangement"
+        ordering = ["-created_at"]
+        verbose_name = "教学安排"
+        verbose_name_plural = verbose_name
+        unique_together = [("teacher", "course_tree", "semester")]
+
+    def __str__(self):
+        return f"{self.teacher} / {self.course_tree.name} / {self.semester}"
