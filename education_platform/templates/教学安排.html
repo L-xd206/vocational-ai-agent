@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教学安排</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+
+    .head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 16px; margin-bottom:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .head-title { font-size:20px; font-weight:800; color:#1F2D44; }
+    .head-sub { font-size:13px; color:var(--muted); font-weight:600; }
+    .head-actions { display:flex; gap:10px; margin-left:auto; }
+
+    .stats { display:flex; gap:12px; margin-bottom:12px; }
+    .stat-card { flex:1; padding:16px 18px; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); display:flex; align-items:center; gap:12px; }
+    .stat-num { font-size:30px; font-weight:800; color:#2563EB; line-height:1; }
+    .stat-label { font-size:12px; color:var(--muted); font-weight:700; margin-top:4px; }
+
+    .toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; margin-bottom:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .toolbar-filters { display:flex; align-items:center; gap:10px; flex:1; min-width:0; flex-wrap:wrap; }
+    .field { height:34px; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; }
+    .field.search { flex:1; min-width:180px; max-width:280px; }
+    .field:focus { border-color:#93C5FD; background:#fff; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+
+    .course-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+    .course-card { padding:16px 18px; border:1px solid var(--line); border-radius:14px; background:var(--white); box-shadow:var(--shadow); }
+    .course-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    .course-name { font-size:15px; font-weight:800; color:#1F2D44; }
+    .course-meta { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); font-weight:600; flex-wrap:wrap; }
+    .course-meta .dot { width:3px; height:3px; border-radius:50%; background:#CBD5E1; }
+    .course-bottom { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .bottom-text { font-size:12px; color:var(--muted); font-weight:600; margin-right:4px; }
+    .tag { display:inline-flex; align-items:center; padding:2px 9px; border-radius:7px; font-size:11px; font-weight:800; background:#EEF4FE; color:#3B82F6; }
+    .actions { display:flex; justify-content:flex-end; gap:6px; margin-top:10px; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; transition:.14s ease; }
+    .text-btn:hover { background:#EFF6FF; }
+    .empty { padding:50px 0; text-align:center; color:var(--muted); font-size:14px; }
+
+    .modal-mask { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); } .modal-mask.show { display:flex; }
+    .modal { width:600px; max-width:94vw; max-height:90vh; overflow:auto; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; position:sticky; top:0; }
+    .modal-title { font-size:16px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { padding:20px; }
+    .form-item { margin-bottom:16px; }
+    .form-label { display:block; margin-bottom:7px; color:#64748B; font-size:12px; font-weight:800; }
+    .form-row { display:flex; gap:12px; }
+    .form-row .form-item { flex:1; }
+    .class-grid { display:flex; flex-wrap:wrap; gap:8px; }
+    .class-chip { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border:1px solid #DDE8F4; border-radius:9px; background:#FBFDFF; cursor:pointer; font-size:12px; font-weight:700; color:#43516A; transition:.14s ease; user-select:none; }
+    .class-chip.selected { border-color:#3B82F6; background:#EFF6FF; color:#2563EB; }
+    .class-chip input { display:none; }
+    .course-meta-box { padding:10px 12px; border-radius:10px; background:#F0F7FF; font-size:12px; color:#475569; font-weight:600; display:none; }
+    .course-meta-box.show { display:block; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 20px 20px; border-top:1px solid #EEF3F8; }
+    .toast { position:fixed; right:22px; top:22px; z-index:120; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; } .toast.show { opacity:1; transform:translateY(0); }
+
+    .member-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+    .member-tab { padding:6px 12px; border:1px solid #DDE8F4; border-radius:8px; background:#fff; color:#43516A; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .member-tab.active { border-color:#3B82F6; background:#EFF6FF; color:#2563EB; }
+    .member-summary { font-size:13px; color:#64748B; margin-bottom:10px; }
+    table.member-table { width:100%; border-collapse:collapse; }
+    table.member-table th { padding:8px 10px; text-align:left; font-size:12px; color:#73829A; border-bottom:1px solid #E8EEF7; background:#F8FBFF; }
+    table.member-table td { padding:8px 10px; font-size:13px; color:#334155; border-bottom:1px solid #EEF3F8; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="head">
+    <div>
+      <div class="head-title">教学安排</div>
+      <div class="head-sub" id="headSemester">查看并管理自己的教学课程</div>
+    </div>
+    <div class="head-actions"><button class="btn btn-primary" onclick="openAddModal()">新增</button></div>
+  </section>
+
+  <section class="stats">
+    <div class="stat-card"><div><div class="stat-num" id="statCourses">0</div><div class="stat-label">我的课程</div></div></div>
+    <div class="stat-card"><div><div class="stat-num" id="statClasses">0</div><div class="stat-label">授课班级</div></div></div>
+    <div class="stat-card"><div><div class="stat-num" id="statStudents">0</div><div class="stat-label">覆盖学生</div></div></div>
+  </section>
+
+  <section class="toolbar">
+    <div class="toolbar-filters">
+      <select class="field" id="semesterFilter" onchange="loadArrangements()"></select>
+      <input class="field search" id="searchInput" placeholder="搜索课程、班级" oninput="loadArrangements()">
+      <button class="btn" onclick="resetFilters()">重置</button>
+    </div>
+  </section>
+
+  <div class="course-list" id="courseList"><div class="empty">加载中...</div></div>
+
+  <!-- 新增/调整班级弹窗 -->
+  <div class="modal-mask" id="editModal" onclick="closeModal(event,'editModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="editModalTitle">新增教学安排</div><button class="modal-close" onclick="hideModal('editModal')">×</button></div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-item"><label class="form-label">学期</label><select class="field" id="semesterSelect" style="width:100%"></select></div>
+        </div>
+        <div class="form-item">
+          <label class="form-label">教学课程</label>
+          <select class="field" id="courseSelect" style="width:100%" onchange="onCourseChange()"><option value="">请选择课程</option></select>
+        </div>
+        <div class="form-item"><div class="course-meta-box" id="courseMeta"></div></div>
+        <div class="form-item">
+          <label class="form-label">授课班级（可多选）</label>
+          <div class="class-grid" id="classGrid"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="hideModal('editModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveArrangement()">确定加入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 班级成员弹窗 -->
+  <div class="modal-mask" id="memberModal" onclick="closeModal(event,'memberModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="memberModalTitle">班级成员</div><button class="modal-close" onclick="hideModal('memberModal')">×</button></div>
+      <div class="modal-body">
+        <div class="member-tabs" id="memberTabs"></div>
+        <div class="member-summary" id="memberSummary"></div>
+        <div id="memberTableWrap"></div>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="printMembers()">打印</button><button class="btn btn-primary" onclick="hideModal('memberModal')">关闭</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    let courses = [], classes = [], arrangements = [];
+    let editingId = null, memberArrangementId = null, memberActiveClassId = null, memberData = [];
+
+    const semesterLabel = code => {
+      const m = /^(\d{4})-(\d{4})-(\d)$/.exec(code || '');
+      return m ? `${m[1]}-${m[2]} 第${m[3]==='1'?'一':'二'}学期` : code;
+    };
+
+    function buildSemesterOptions() {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const currentStart = month >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+      const list = [];
+      for (let i = 0; i >= -1; i--) {
+        const s = currentStart + i;
+        list.push({ code: `${s}-${s+1}-1`, label: `${s}-${s+1} 第一学期` });
+        list.push({ code: `${s}-${s+1}-2`, label: `${s}-${s+1} 第二学期` });
+      }
+      const current = list[0].code;
+      const sel = document.getElementById('semesterSelect');
+      sel.innerHTML = list.map(o => `<option value="${o.code}">${o.label}</option>`).join('');
+      sel.value = current;
+      const filter = document.getElementById('semesterFilter');
+      filter.innerHTML = '<option value="all">全部学期</option>' + list.map(o => `<option value="${o.code}">${o.label}</option>`).join('');
+      filter.value = current;
+      return current;
+    }
+
+    async function loadCourseOptions() {
+      try {
+        const r = await fetch('/api/teaching-arrangements/course-options'); const d = await r.json();
+        if (d.ok) {
+          courses = d.courses;
+          document.getElementById('courseSelect').innerHTML = '<option value="">请选择课程</option>' +
+            courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        }
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadClassOptions() {
+      try {
+        const r = await fetch('/api/teaching-arrangements/class-options'); const d = await r.json();
+        if (d.ok) classes = d.classes;
+      } catch(e) { console.error(e); }
+    }
+
+    function renderClassChips(containerId, selectedIds) {
+      const sel = new Set(selectedIds || []);
+      document.getElementById(containerId).innerHTML = classes.map(c => `
+        <label class="class-chip ${sel.has(c.id)?'selected':''}" data-id="${c.id}">
+          <input type="checkbox" ${sel.has(c.id)?'checked':''} onchange="this.closest('.class-chip').classList.toggle('selected', this.checked)">
+          <span>${escapeHtml(c.name)}</span>
+        </label>
+      `).join('');
+    }
+
+    function getSelectedClassIds(containerId) {
+      return Array.from(document.querySelectorAll(`#${containerId} .class-chip.selected`)).map(el => Number(el.dataset.id));
+    }
+
+    function onCourseChange() {
+      const id = document.getElementById('courseSelect').value;
+      const meta = document.getElementById('courseMeta');
+      const c = courses.find(x => String(x.id) === String(id));
+      if (!c) { meta.classList.remove('show'); meta.innerHTML = ''; return; }
+      meta.classList.add('show');
+      meta.innerHTML = `学时 <b>${c.hours}</b>　学分 <b>${c.credits}</b>　类型 <b>${escapeHtml(c.course_type_display)}</b>`;
+    }
+
+    async function loadArrangements() {
+      const p = {};
+      const sem = document.getElementById('semesterFilter').value;
+      if (sem && sem !== 'all') p.semester = sem;
+      const kw = document.getElementById('searchInput').value.trim();
+      if (kw) p.keyword = kw;
+      const qs = Object.entries(p).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+      try {
+        const r = await fetch('/api/teaching-arrangements' + (qs?'?'+qs:'')); const d = await r.json();
+        if (d.ok) { arrangements = d.arrangements; renderStats(d.stats); renderList(); }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderStats(stats) {
+      document.getElementById('statCourses').textContent = stats.course_count;
+      document.getElementById('statClasses').textContent = stats.class_count;
+      document.getElementById('statStudents').textContent = stats.student_count;
+      const sem = document.getElementById('semesterFilter').value;
+      document.getElementById('headSemester').textContent = sem === 'all' ? '全部学期' : (semesterLabel(sem) + ' · 查看并管理自己的教学课程');
+    }
+
+    function renderList() {
+      const box = document.getElementById('courseList');
+      if (!arrangements.length) { box.innerHTML = '<div class="empty">暂无教学课程，点击右上角「新增」安排课程与班级</div>'; return; }
+      box.innerHTML = arrangements.map(a => `
+        <article class="course-card">
+          <div class="course-top">
+            <div class="course-name">${escapeHtml(a.course_name)}</div>
+            <div class="course-meta">
+              <span>${escapeHtml(semesterLabel(a.semester))}</span><span class="dot"></span>
+              <span>${escapeHtml(a.created_at)}</span><span class="dot"></span>
+              <span><b>${a.hours}</b> 学时</span><span class="dot"></span>
+              <span><b>${a.credits}</b> 学分</span>
+            </div>
+          </div>
+          <div class="course-bottom">
+            <span class="bottom-text">授课班级 <b>${a.class_names.length}</b> 个 · 覆盖学生约 <b>${a.student_count}</b> 人</span>
+            ${a.class_names.map(n => `<span class="tag">${escapeHtml(n)}</span>`).join('')}
+          </div>
+          <div class="actions">
+            <button class="text-btn" onclick="openEditClasses(${a.id})">调整班级</button>
+            <button class="text-btn" onclick="openMembers(${a.id})">班级成员</button>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function resetFilters() { document.getElementById('searchInput').value=''; buildSemesterOptions(); loadArrangements(); }
+
+    function openAddModal() {
+      editingId = null;
+      document.getElementById('editModalTitle').textContent = '新增教学安排';
+      document.getElementById('courseSelect').value = '';
+      onCourseChange();
+      renderClassChips('classGrid', []);
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function openEditClasses(id) {
+      const a = arrangements.find(x => x.id === id); if (!a) return;
+      editingId = id;
+      document.getElementById('editModalTitle').textContent = `调整班级 · ${a.course_name}`;
+      document.getElementById('courseSelect').value = a.course_tree_id;
+      onCourseChange();
+      renderClassChips('classGrid', a.class_ids);
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    async function saveArrangement() {
+      const course_tree_id = Number(document.getElementById('courseSelect').value);
+      const semester = document.getElementById('semesterSelect').value;
+      const class_ids = getSelectedClassIds('classGrid');
+      if (!course_tree_id) return showToast('请先选择课程');
+      if (!class_ids.length) return showToast('请至少选择一个班级');
+      try {
+        let r;
+        if (editingId) {
+          r = await fetch(`/api/teaching-arrangements/${editingId}`, { method:'PATCH', headers:jsonHeaders(), body:JSON.stringify({class_ids}) });
+        } else {
+          r = await fetch('/api/teaching-arrangements', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({course_tree_id, semester, class_ids}) });
+        }
+        const d = await r.json();
+        if (d.ok) { hideModal('editModal'); loadArrangements(); showToast(editingId ? '授课班级已更新' : (d.created ? '已加入课程' : '已更新授课班级')); }
+        else showToast(d.error || '操作失败');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    async function openMembers(id) {
+      try {
+        const r = await fetch(`/api/teaching-arrangements/${id}/members`); const d = await r.json();
+        if (!d.ok) return showToast(d.error || '加载失败');
+        memberArrangementId = id;
+        memberActiveClassId = null;
+        memberData = d.members || [];
+        const a = arrangements.find(x => x.id === id);
+        document.getElementById('memberModalTitle').textContent = `班级成员 · ${a ? a.course_name : ''}`;
+        renderMemberModal();
+        document.getElementById('memberModal').classList.add('show');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function renderMemberModal() {
+      const members = memberData;
+      if (!members || !members.length) { document.getElementById('memberTabs').innerHTML=''; document.getElementById('memberSummary').textContent=''; document.getElementById('memberTableWrap').innerHTML='<div class="empty">暂无成员</div>'; return; }
+      if (!members.some(m => m.class_id === memberActiveClassId)) memberActiveClassId = members[0].class_id;
+      document.getElementById('memberTabs').innerHTML = members.map(m => `
+        <button class="member-tab ${m.class_id===memberActiveClassId?'active':''}" onclick="switchMemberClass(${m.class_id})">${escapeHtml(m.class_name)}</button>
+      `).join('');
+      const active = members.find(m => m.class_id === memberActiveClassId);
+      document.getElementById('memberSummary').innerHTML = active ? `当前班级：<b>${escapeHtml(active.class_name)}</b> · ${escapeHtml(active.grade||'')} · 共 <b>${active.students.length}</b> 人` : '';
+      document.getElementById('memberTableWrap').innerHTML = `
+        <table class="member-table"><thead><tr><th style="width:56px">序号</th><th>姓名</th><th>学号</th></tr></thead><tbody>
+          ${active.students.map((s,i) => `<tr><td>${i+1}</td><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.student_id)}</td></tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    function switchMemberClass(classId) { memberActiveClassId = classId; renderMemberModal(); }
+
+    function printMembers() {
+      const arr = arrangements.find(x => x.id === memberArrangementId);
+      const active = memberData.find(m => m.class_id === memberActiveClassId);
+      if (!active) return;
+      const win = window.open('', '_blank');
+      if (!win) return showToast('请允许弹窗后重试打印');
+      const rows = active.students.map((s,i) => `<tr><td style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">${i+1}</td><td style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">${escapeHtml(s.name)}</td><td style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">${escapeHtml(s.student_id)}</td></tr>`).join('');
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>班级成员名单</title><style>body{font-family:'Microsoft YaHei',sans-serif;padding:24px;color:#1f2d3d;}h1{font-size:20px;margin:0 0 8px;}table{width:100%;border-collapse:collapse;font-size:13px;}</style></head><body><h1>班级成员名单 · ${escapeHtml(arr ? arr.course_name : '')}</h1><div style="font-size:12px;color:#64748b;margin-bottom:12px;">${escapeHtml(active.class_name)} · ${escapeHtml(active.grade||'')} · 共 ${active.students.length} 人</div><table><thead><tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">序号</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">姓名</th><th style="text-align:left;border-bottom:1px solid #ddd;padding:8px;">学号</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=function(){window.print();}<\/script></body></html>`);
+      win.document.close();
+    }
+
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e,id) { if(e.target.id===id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+    buildSemesterOptions();
+    loadCourseOptions();
+    loadClassOptions();
+    loadArrangements();
+  </script>
+</body>
+</html>

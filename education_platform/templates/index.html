@@ -475,7 +475,8 @@
 
   <script>
     // 侧边栏只在主框架中配置一次，右侧业务页面通过 iframe 复用它。
-    document.getElementById('sidebar').setMenuData([
+    // 每个子菜单项带 code（权限码），配合 /api/auth/me 返回的 permissions 做前端隐藏。
+    const MENU_DATA = [
       {
         group: '岗位采集',
         items: [
@@ -483,8 +484,8 @@
             label: '岗位采集',
             icon: 'monitor',
             children: [
-              { label: '岗位数据采集', href: '岗位数据采集.html' },
-              { label: '未采纳数据', href: '未采纳数据.html' }
+              { label: '岗位数据采集', href: '岗位数据采集.html', code: 'job_collection' },
+              { label: '未采纳数据', href: '未采纳数据.html', code: 'rejected_data' }
             ]
           }
         ]
@@ -497,7 +498,7 @@
             icon: 'network',
             open: true,
             children: [
-              { label: '能力图谱库', href: '能力图谱库.html', active: true }
+              { label: '能力图谱库', href: '能力图谱库.html', code: 'capability_graph', active: true }
             ]
           }
         ]
@@ -509,8 +510,23 @@
             label: '教师工作台',
             icon: 'doc',
             children: [
-              { label: '课程管理', href: '课程管理.html' },
-              { label: '教育资源库', href: '教育资源库.html' }
+              { label: '课程管理', href: '课程管理.html', code: 'course_manage' },
+              { label: '教育资源库', href: '教育资源库.html', code: 'resource_library' },
+              { label: '教学安排', href: '教学安排.html', code: 'teaching_schedule' },
+              { label: '课程试题', href: '试题库.html', code: 'question_bank' }
+            ]
+          }
+        ]
+      },
+      {
+        group: '学习空间',
+        items: [
+          {
+            label: '学习空间',
+            icon: 'doc',
+            children: [
+              { label: '学习计划', href: '学习计划.html', code: 'learning_plan' },
+              { label: '学习档案', href: '学习档案.html', code: 'learning_archive' }
             ]
           }
         ]
@@ -522,18 +538,35 @@
             label: '系统管理',
             icon: 'cog',
             children: [
-              { label: '通知管理', href: '通知管理.html' },
-              { label: '组织机构', href: '组织机构.html' },
-              { label: '班级管理', href: '班级管理.html' },
-              { label: '学生管理', href: '学生管理.html' },
-              { label: '用户管理', href: '用户管理.html' },
-              { label: '角色管理', href: '角色管理.html' },
-              { label: '系统日志', href: '系统日志.html' }
+              { label: '通知管理', href: '通知管理.html', code: 'notification' },
+              { label: '组织机构', href: '组织机构.html', code: 'organization' },
+              { label: '班级管理', href: '班级管理.html', code: 'class_manage' },
+              { label: '学生管理', href: '学生管理.html', code: 'student_manage' },
+              { label: '用户管理', href: '用户管理.html', code: 'user_manage' },
+              { label: '角色管理', href: '角色管理.html', code: 'role_manage' },
+              { label: '系统日志', href: '系统日志.html', code: 'system_log' }
             ]
           }
         ]
       }
-    ]);
+    ];
+
+    function filterMenuByPermissions(menuData, permissions) {
+      // 权限信息缺失时不隐藏（避免误伤；后端才是真正的安全拦截）
+      if (!permissions || permissions.length === 0) return menuData;
+      const perms = new Set(permissions);
+      return menuData
+        .map(group => ({
+          ...group,
+          items: (group.items || []).map(item => ({
+            ...item,
+            children: (item.children || []).filter(c => !c.code || perms.has(c.code)),
+          })).filter(item => item.children && item.children.length > 0),
+        }))
+        .filter(group => group.items && group.items.length > 0);
+    }
+
+    document.getElementById('sidebar').setMenuData(MENU_DATA);
 
     // 监听菜单选择，切换 iframe 页面
     document.getElementById('sidebar').addEventListener('menu-select', function(e) {
@@ -560,6 +593,8 @@
         sidebar.setAttribute('user-name', u.real_name || u.username);
         if (u.role) sidebar.setAttribute('user-role', u.role.name);
         if (u.avatar) sidebar.setAttribute('user-avatar', u.avatar);
+        // 按权限隐藏菜单
+        sidebar.setMenuData(filterMenuByPermissions(MENU_DATA, u.permissions));
         refreshMsgBadge();
       }
     });

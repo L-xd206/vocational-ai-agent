@@ -21,4 +21,10 @@ class Command(BaseCommand):
         self.stdout.write("\n[notifications]")
         call_command("seed_notifications")
 
+        self.stdout.write("\n[teaching]")
+        call_command("seed_teaching")
+
+        self.stdout.write("\n[learning]")
+        call_command("seed_learning")
+
         self.stdout.write(self.style.SUCCESS("\n=== 全部 seed 完成 ==="))

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学习档案</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .top-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 16px; margin-bottom:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .student-avatar { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#93C5FD,#A5B4FC); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; flex-shrink:0; }
+    .student-name { font-size:16px; font-weight:800; color:#1F2D44; }
+    .student-meta { font-size:12px; color:var(--muted); font-weight:600; }
+
+    .stats { display:flex; gap:12px; margin-bottom:12px; }
+    .stat-card { flex:1; padding:16px 18px; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); text-align:center; }
+    .stat-num { font-size:28px; font-weight:800; color:#2563EB; line-height:1; }
+    .stat-label { font-size:12px; color:var(--muted); font-weight:700; margin-top:6px; }
+
+    .content { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:12px; }
+    .card { padding:16px 18px; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); }
+    .card-title { font-size:15px; font-weight:800; color:#1F2D44; margin-bottom:14px; }
+
+    .timeline { position:relative; padding-left:20px; }
+    .tl-item { position:relative; padding-bottom:18px; }
+    .tl-item::before { content:''; position:absolute; left:-14px; top:6px; width:8px; height:8px; border-radius:50%; background:#3B82F6; }
+    .tl-item::after { content:''; position:absolute; left:-11px; top:18px; bottom:-4px; width:2px; background:#E3EBF5; }
+    .tl-item:last-child::after { display:none; }
+    .tl-title { font-size:14px; font-weight:800; color:#1F2D44; }
+    .tl-desc { font-size:12px; color:var(--muted); margin-top:3px; }
+    .tl-tag { display:inline-flex; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:800; background:#EFF6FF; color:#2563EB; margin-bottom:4px; }
+
+    .placeholder { padding:40px 0; text-align:center; color:var(--muted); font-size:13px; }
+    .empty { padding:40px 0; text-align:center; color:var(--muted); font-size:13px; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="top-row">
+    <div class="student-avatar" id="avatar">学</div>
+    <div>
+      <div class="student-name" id="studentName">加载中...</div>
+      <div class="student-meta" id="studentMeta"></div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat-card"><div class="stat-num" id="statPlans">0</div><div class="stat-label">学习计划</div></div>
+    <div class="stat-card"><div class="stat-num" id="statHours">0</div><div class="stat-label">学习学时</div></div>
+    <div class="stat-card"><div class="stat-num" id="statAssess">0</div><div class="stat-label">测评次数</div></div>
+  </section>
+
+  <div class="content">
+    <section class="card">
+      <div class="card-title">学习记录</div>
+      <div class="timeline" id="timeline"><div class="empty">加载中...</div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">测评成绩</div>
+      <div class="placeholder">测评系统尚未接入，成绩与雷达图将在后续版本呈现。</div>
+    </section>
+  </div>
+
+  <script>
+    async function loadProfile() {
+      try {
+        const r = await fetch('/api/learning-profile'); const d = await r.json();
+        if (!d.ok) return;
+        document.getElementById('studentName').textContent = d.student.name;
+        document.getElementById('avatar').textContent = d.student.name.charAt(0) || '学';
+        const meta = [d.student.major, d.student.grade, d.student.class_name, '学号 ' + d.student.student_id].filter(Boolean).join(' · ');
+        document.getElementById('studentMeta').textContent = meta;
+        document.getElementById('statPlans').textContent = d.stats.plan_count;
+        document.getElementById('statHours').textContent = d.stats.learned_hours;
+        document.getElementById('statAssess').textContent = d.stats.assessment_count;
+        renderTimeline(d.records);
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTimeline(records) {
+      const box = document.getElementById('timeline');
+      if (!records || !records.length) { box.innerHTML = '<div class="empty">暂无学习记录</div>'; return; }
+      box.innerHTML = records.map(r => `
+        <div class="tl-item">
+          ${r.tag ? `<span class="tl-tag">${escapeHtml(r.tag)}</span>` : ''}
+          <div class="tl-title">${escapeHtml(r.title)}</div>
+          <div class="tl-desc">${escapeHtml(r.description)}</div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+    loadProfile();
+  </script>
+</body>
+</html>

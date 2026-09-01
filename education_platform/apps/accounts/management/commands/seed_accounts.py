@@ -105,21 +105,17 @@ class Command(BaseCommand):
             "capability_graph", "capability_dispatch", "profile", "message",
         ]))
 
-        # 教师：教师工作台 + 学习空间 + 个人
+        # 教师：教师工作台 + 个人
         teacher_permissions = Permission.objects.filter(code__in=[
             "course_manage", "resource_library", "teaching_schedule", "question_bank",
-            "learning_plan", "learning_archive",
             "profile", "message",
         ])
-        teacher_role, created = Role.objects.get_or_create(
+        teacher_role, _ = Role.objects.get_or_create(
             name="教师",
             defaults={"description": "维护课程、能力项与实训资源", "is_builtin": False},
         )
-        if created:
-            teacher_role.permissions.set(teacher_permissions)
-            self.stdout.write("已创建角色：教师")
-        else:
-            self.stdout.write("角色 教师 已存在，跳过")
+        teacher_role.permissions.set(teacher_permissions)
+        self.stdout.write("已创建/更新角色：教师")
 
         college_manager_role, _ = Role.objects.get_or_create(
             name="学院负责人",
