@@ -90,26 +90,10 @@
       <option value="todo">未开始</option>
     </select>
     <span class="filter-count">共 <span id="planCount">0</span> 门课程</span>
-    <button class="btn btn-primary" onclick="openAddModal()">新增计划</button>
+    <button class="btn btn-primary" onclick="location.href='新增计划.html'">新增计划</button>
   </section>
 
   <section class="plan-grid" id="planGrid"><div class="empty">加载中...</div></section>
-
-  <!-- 新增计划弹窗 -->
-  <div class="modal-mask" id="addModal" onclick="closeModal(event,'addModal')">
-    <div class="modal" onclick="event.stopPropagation()">
-      <div class="modal-head"><div class="modal-title">新增学习计划</div><button class="modal-close" onclick="hideModal('addModal')">×</button></div>
-      <div class="modal-body">
-        <div class="form-item"><label class="form-label">计划名称</label><input class="field" id="formName" placeholder="请输入计划名称" style="width:100%"></div>
-        <div class="form-item"><label class="form-label">总学时</label><input class="field" id="formHours" type="number" min="0" placeholder="如 28" style="width:100%"></div>
-        <div class="form-item"><label class="form-label">截止日期</label><input class="field" id="formDeadline" type="date" style="width:100%"></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn" onclick="hideModal('addModal')">取消</button>
-        <button class="btn btn-primary" onclick="savePlan()">保存</button>
-      </div>
-    </div>
-  </div>
 
   <!-- 删除计划弹窗 -->
   <div class="modal-mask" id="deleteModal" onclick="closeModal(event,'deleteModal')">
@@ -175,7 +159,7 @@
       if (!plans.length) { grid.innerHTML = '<div class="empty">暂无符合条件的学习计划</div>'; return; }
       grid.innerHTML = plans.map(p => {
         const delBtn = p.can_delete ? `<button class="plan-delete-btn" title="删除计划" onclick="event.stopPropagation(); openDeleteModal(${p.id})">✕</button>` : '';
-        return `<article class="plan-card">
+        return `<article class="plan-card" onclick="location.href='计划详情.html?id=${p.id}'">
           ${delBtn}
           <div class="plan-name">${escapeHtml(p.name)}</div>
           <div class="plan-tags">
@@ -189,26 +173,6 @@
           </div>
         </article>`;
       }).join('');
-    }
-
-    function openAddModal() {
-      document.getElementById('formName').value = '';
-      document.getElementById('formHours').value = '';
-      document.getElementById('formDeadline').value = '';
-      document.getElementById('addModal').classList.add('show');
-    }
-
-    async function savePlan() {
-      const name = document.getElementById('formName').value.trim();
-      const hours = document.getElementById('formHours').value;
-      const deadline = document.getElementById('formDeadline').value;
-      if (!name) return showToast('请填写计划名称');
-      try {
-        const r = await fetch('/api/learning-plans', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({name, total_hours:Number(hours)||0, deadline: deadline||null}) });
-        const d = await r.json();
-        if (d.ok) { hideModal('addModal'); loadPlans(); showToast('学习计划已新增'); }
-        else showToast(d.error || '新增失败');
-      } catch(e) { showToast('网络错误'); }
     }
 
     function openDeleteModal(id) {

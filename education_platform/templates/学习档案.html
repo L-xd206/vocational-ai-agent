@@ -34,6 +34,27 @@
 
     .placeholder { padding:40px 0; text-align:center; color:var(--muted); font-size:13px; }
     .empty { padding:40px 0; text-align:center; color:var(--muted); font-size:13px; }
+    .assess-row { display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid #EEF3F8; }
+    .assess-row:last-child { border-bottom:none; }
+    .assess-title { font-size:14px; font-weight:800; color:#1F2D44; }
+    .assess-meta { font-size:12px; color:var(--muted); margin-top:3px; }
+    .assess-score { font-size:18px; font-weight:800; color:#2563EB; margin-left:auto; }
+    .text-btn { border:none; border-radius:8px; padding:6px 10px; background:transparent; color:#3B82F6; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; }
+    .modal-mask { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); } .modal-mask.show { display:flex; }
+    .modal { width:640px; max-width:94vw; max-height:88vh; overflow:auto; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; position:sticky; top:0; }
+    .modal-title { font-size:16px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { padding:18px 20px; }
+    .q-meta { font-size:13px; color:#475569; font-weight:600; margin-bottom:14px; }
+    .q-item { border:1px solid #E3EBF4; border-radius:12px; padding:14px; margin-bottom:12px; }
+    .q-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .q-title { font-size:14px; font-weight:700; color:#1F2D44; line-height:1.5; }
+    .q-result { flex-shrink:0; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:800; }
+    .q-result.ok { background:#DCFCE7; color:#16a34a; } .q-result.bad { background:#FEE2E2; color:#dc2626; }
+    .q-opts { margin-top:8px; } .q-opts div { padding:6px 8px; font-size:13px; color:#475569; }
+    .q-answer { margin-top:8px; padding:8px 10px; border-radius:8px; background:#F8FAFC; font-size:13px; color:#64748B; }
+    .toast { position:fixed; right:22px; top:22px; z-index:130; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; } .toast.show { opacity:1; transform:translateY(0); }
   </style>
 </head>
 <body>
@@ -60,9 +81,19 @@
 
     <section class="card">
       <div class="card-title">测评成绩</div>
-      <div class="placeholder">测评系统尚未接入，成绩与雷达图将在后续版本呈现。</div>
+      <div id="assessBody"><div class="empty">加载中...</div></div>
     </section>
   </div>
+
+  <!-- 测评详情弹窗 -->
+  <div class="modal-mask" id="assessModal" onclick="closeModal(event,'assessModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><div class="modal-title" id="assessModalTitle">测评详情</div><button class="modal-close" onclick="hideModal('assessModal')">×</button></div>
+      <div class="modal-body" id="assessModalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     async function loadProfile() {
@@ -78,6 +109,7 @@
         document.getElementById('statAssess').textContent = d.stats.assessment_count;
         renderTimeline(d.records);
       } catch(e) { console.error(e); }
+      loadAssessments();
     }
 
     function renderTimeline(records) {
@@ -92,6 +124,50 @@
       `).join('');
     }
 
+    async function loadAssessments() {
+      const box = document.getElementById('assessBody');
+      try {
+        const r = await fetch('/api/assessments/history'); const d = await r.json();
+        if (!d.ok) { box.innerHTML = '<div class="empty">加载失败</div>'; return; }
+        if (!d.runs.length) { box.innerHTML = '<div class="empty">暂无测评，前往学习计划完成随堂练习或测验后展示</div>'; return; }
+        box.innerHTML = d.runs.map(run => `
+          <div class="assess-row">
+            <div>
+              <div class="assess-title">${escapeHtml(run.title)}</div>
+              <div class="assess-meta">${escapeHtml(run.submitted_at)} · 答对 ${run.correct_count} / 答错 ${run.wrong_count}</div>
+            </div>
+            <div class="assess-score">${run.score}/${run.total}</div>
+            <button class="text-btn" onclick="openAssessDetail(${run.id})">查看</button>
+          </div>
+        `).join('');
+      } catch(e) { box.innerHTML = '<div class="empty">加载失败</div>'; }
+    }
+
+    async function openAssessDetail(id) {
+      try {
+        const r = await fetch(`/api/assessments/${id}`); const d = await r.json();
+        if (!d.ok) return showToast(d.error || '加载失败');
+        document.getElementById('assessModalTitle').textContent = d.run.title;
+        const typeName = { single:'单选', multiple:'多选', judgment:'判断', short:'简答' };
+        document.getElementById('assessModalBody').innerHTML = `
+          <div class="q-meta">得分 <b>${d.run.score}</b>/${d.run.total} · 答对 ${d.run.correct_count} · 答错 ${d.run.wrong_count} · ${escapeHtml(d.run.submitted_at)}</div>
+          ${d.items.map((it, i) => {
+            const chosenText = (it.chosen || []).join('、') || '未作答';
+            const ansText = (it.correct_answer || []).join('、') || '（主观）';
+            return `<div class="q-item">
+              <div class="q-head"><div class="q-title">${i + 1}. [${typeName[it.question_type] || it.question_type}] ${escapeHtml(it.stem)}</div><div class="q-result ${it.is_correct ? 'ok' : 'bad'}">${it.is_correct ? '正确' : '错误'}</div></div>
+              ${it.options && it.options.length ? `<div class="q-opts">${it.options.map(o => `<div>${escapeHtml(o)}</div>`).join('')}</div>` : ''}
+              <div class="q-answer">你的答案：${escapeHtml(chosenText)} · 正确答案：${escapeHtml(ansText)}</div>
+            </div>`;
+          }).join('')}
+        `;
+        document.getElementById('assessModal').classList.add('show');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(e,id) { if(e.target.id===id) hideModal(id); }
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
     function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
 
     loadProfile();

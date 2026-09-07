@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计划详情</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.18s ease; }
+    .btn:hover { border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; }
+    .btn-ghost { background:transparent; box-shadow:none; }
+    .btn-quiz { color:#7c3aed; border-color:#ddd6fe; }
+    .btn-quiz:hover { border-color:#a78bfa; background:#f5f3ff; }
+
+    .head { padding:14px 16px; margin-bottom:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .head-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+    .plan-name { font-size:18px; font-weight:800; color:#1F2D44; }
+    .chip { display:inline-flex; padding:2px 9px; border-radius:7px; font-size:11px; font-weight:800; }
+    .chip.semester { background:#EFF6FF; color:#2563EB; }
+    .chip.self { background:#F0FDF4; color:#16a34a; }
+    .chip.ai { background:#F5F3FF; color:#7c3aed; }
+    .meta { font-size:12px; color:var(--muted); font-weight:600; margin-top:4px; }
+    .progress-row { display:flex; align-items:center; gap:12px; }
+    .progress-track { flex:1; height:8px; border-radius:4px; background:#EEF3F8; overflow:hidden; }
+    .progress-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#60A5FA,#2563EB); transition:.3s ease; }
+    .progress-text { font-size:13px; font-weight:800; color:#2563EB; }
+
+    .layout { flex:1; min-height:0; display:flex; gap:12px; }
+    .catalog { width:300px; flex-shrink:0; overflow-y:auto; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); padding:12px; }
+    .chapter { margin-bottom:8px; }
+    .chapter-head { display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:9px; cursor:pointer; font-size:13px; font-weight:800; color:#334155; }
+    .chapter-head:hover { background:#F8FBFF; }
+    .chapter-toggle { transition:.15s ease; color:#94a3b8; }
+    .chapter.open .chapter-toggle { transform:rotate(90deg); }
+    .chapter-count { margin-left:auto; font-size:11px; color:var(--muted); font-weight:600; }
+    .chapter-body { display:none; } .chapter.open .chapter-body { display:block; }
+    .cat-course { margin-bottom:12px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .cat-course-head { display:flex; align-items:center; gap:6px; padding:9px 10px; background:#F8FBFF; cursor:pointer; font-size:13px; font-weight:800; color:#1F2D44; }
+    .cat-course-head:hover { background:#F0F7FF; }
+    .cat-course-body { display:none; padding:4px 0 6px; } .cat-course-body.open { display:block; }
+    .cat-course .chapter { margin:0 6px; }
+    .point-item { display:flex; align-items:center; gap:8px; width:100%; padding:7px 10px 7px 26px; border:none; border-radius:8px; background:transparent; cursor:pointer; font-size:13px; color:#43516A; font-family:inherit; text-align:left; }
+    .point-item:hover { background:#F8FBFF; }
+    .point-item.active { background:#EFF6FF; color:#2563EB; font-weight:700; }
+    .point-check { width:16px; height:16px; border-radius:4px; border:1px solid #DDE8F4; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; color:#16a34a; }
+    .point-item.done .point-check { background:#DCFCE7; border-color:#86efac; }
+    .quiz-entry { display:flex; align-items:center; gap:8px; width:100%; padding:7px 10px 7px 26px; border:none; border-radius:8px; background:transparent; cursor:pointer; font-size:13px; color:#7c3aed; font-family:inherit; text-align:left; }
+    .quiz-entry:hover { background:#F5F3FF; }
+    .quiz-entry .quiz-ic { width:16px; height:16px; border-radius:50%; border:1px dashed #a78bfa; display:inline-flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0; }
+    .catalog .course-quiz { margin-top:6px; padding-top:8px; border-top:1px dashed #E3EBF5; }
+
+    .content { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); }
+    .content-head { padding:14px 18px; border-bottom:1px solid #EEF3F8; }
+    .content-title { font-size:16px; font-weight:800; color:#1F2D44; }
+    .content-meta { font-size:12px; color:var(--muted); margin-top:4px; }
+    .content-body { flex:1; overflow-y:auto; padding:18px; }
+    .card { padding:14px 16px; border:1px solid #E3EBF4; border-radius:12px; margin-bottom:12px; }
+    .card h3 { font-size:14px; font-weight:800; color:#334155; margin-bottom:8px; }
+    .card p { font-size:13px; color:#64748B; line-height:1.7; }
+    .card ul { margin:6px 0 0 18px; } .card li { font-size:13px; color:#64748B; line-height:1.7; }
+    .res-link { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #E3EBF4; border-radius:9px; font-size:13px; color:#2563EB; margin-bottom:6px; }
+    .empty { padding:60px 0; text-align:center; color:var(--muted); font-size:14px; }
+
+    .foot { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid #EEF3F8; gap:10px; }
+    .foot-left { display:flex; gap:10px; }
+    .toast { position:fixed; right:22px; top:22px; z-index:160; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; } .toast.show { opacity:1; transform:translateY(0); }
+
+    /* 测验弹窗 */
+    .modal-mask { position:fixed; inset:0; z-index:130; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.45); backdrop-filter:blur(5px); } .modal-mask.show { display:flex; }
+    .modal { width:700px; max-width:94vw; max-height:90vh; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.28); animation:modalIn .2s ease-out; display:flex; flex-direction:column; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:16px; font-weight:800; color:#1F2D44; }
+    .modal-sub { font-size:12px; color:var(--muted); font-weight:600; margin-top:3px; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { flex:1; overflow-y:auto; padding:18px 20px; }
+    .quiz-q-item { border:1px solid #E3EBF4; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+    .quiz-q-num { display:inline-flex; padding:2px 9px; border-radius:7px; font-size:11px; font-weight:800; background:#F5F3FF; color:#7c3aed; margin-bottom:10px; }
+    .quiz-q-text { font-size:14px; font-weight:700; color:#1F2D44; line-height:1.6; margin-bottom:12px; }
+    .quiz-opt { display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid #E3EBF4; border-radius:9px; margin-bottom:8px; cursor:pointer; font-size:13px; color:#43516A; transition:.12s ease; }
+    .quiz-opt:hover { border-color:#C7D8EE; background:#F8FBFF; }
+    .quiz-opt input { accent-color:#7c3aed; }
+    .quiz-opt.right { border-color:#86efac; background:#F0FDF4; }
+    .quiz-opt.wrong { border-color:#fca5a5; background:#FEF2F2; }
+    .quiz-result-box { padding:12px 16px; border-radius:12px; margin-top:14px; font-size:14px; font-weight:800; }
+    .quiz-result-box.pass { background:#F0FDF4; color:#16a34a; }
+    .quiz-result-box.fail { background:#FEF2F2; color:#dc2626; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid #EEF3F8; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="head">
+    <div class="head-top">
+      <button class="btn btn-ghost" onclick="location.href='学习计划.html'">‹ 返回学习计划</button>
+      <span class="plan-name" id="planName">加载中…</span>
+      <span class="chip" id="planType"></span>
+      <button class="btn" id="planAdjustBtn" style="display:none;margin-left:auto;" onclick="location.href='计划调整.html?id='+planId">调整计划</button>
+    </div>
+    <div class="meta" id="planMeta"></div>
+    <div class="progress-row" style="margin-top:10px;">
+      <span style="font-size:12px;color:var(--muted);font-weight:700;">学习进度</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <span class="progress-text" id="progressText">0%</span>
+      <span style="font-size:12px;color:var(--muted);font-weight:700;" id="catalogHint"></span>
+    </div>
+  </section>
+
+  <div class="layout">
+    <aside class="catalog" id="catalog"><div class="empty">加载中…</div></aside>
+    <section class="content">
+      <div class="content-head">
+        <div class="content-title" id="contentTitle">请选择左侧知识点</div>
+        <div class="content-meta" id="contentMeta"></div>
+      </div>
+      <div class="content-body" id="contentBody"><div class="empty">从左侧章节目录选择知识点开始学习</div></div>
+      <div class="foot">
+        <div class="foot-left">
+          <button class="btn" onclick="goPrev()">上一节</button>
+          <button class="btn" onclick="goNext()">下一节</button>
+        </div>
+        <button class="btn btn-primary" id="doneBtn" onclick="toggleDone()">标记完成</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 测验弹窗 -->
+  <div class="modal-mask" id="quizModal" onclick="closeModal(event,'quizModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div><div class="modal-title" id="quizTitle"></div><div class="modal-sub" id="quizSub"></div></div>
+        <button class="modal-close" onclick="hideQuiz()">×</button>
+      </div>
+      <div class="modal-body" id="quizBody"><div class="empty">加载中...</div></div>
+      <div class="modal-foot">
+        <button class="btn" onclick="hideQuiz()">关闭</button>
+        <button class="btn btn-primary" id="quizSubmitBtn" onclick="submitQuiz()">提交测评</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    const planId = new URLSearchParams(location.search).get('id');
+    let coursesList = [], flatPoints = [], currentPointId = null;
+    // 当前打开的测验
+    let quiz = null; // {scope,node_id,questions}
+
+    async function loadDetail() {
+      try {
+        const r = await fetch(`/api/learning-plans/${planId}/detail`); const d = await r.json();
+        if (!d.ok) { document.getElementById('contentBody').innerHTML = `<div class="empty">${escapeHtml(d.error||'加载失败')}</div>`; return; }
+        coursesList = d.courses || [];
+        flatPoints = coursesList.flatMap(co => (co.chapters||[]).flatMap(ch =>
+          ch.points.map(p => ({...p, courseId: co.course_id, courseName: co.course_name, chapterId: ch.id, chapterName: ch.name}))
+        ));
+        renderHeader(d.plan, d.completed_count, d.total_points);
+        renderCatalog();
+        if (flatPoints.length) selectPoint(flatPoints[0].id, true);
+        else { document.getElementById('contentTitle').textContent = '暂无学习内容'; document.getElementById('contentBody').innerHTML = '<div class="empty">该计划暂未添加课程，可前往计划调整添加</div>'; }
+      } catch(e) { console.error(e); }
+    }
+
+    function renderHeader(plan, done, total) {
+      document.getElementById('planName').textContent = plan.name;
+      const typeCls = { semester:'semester', self:'self', ai:'ai' };
+      const typeEl = document.getElementById('planType');
+      typeEl.className = 'chip ' + (typeCls[plan.plan_type]||'');
+      typeEl.textContent = plan.plan_type_display;
+      const adjBtn = document.getElementById('planAdjustBtn');
+      if (adjBtn) adjBtn.style.display = (plan.plan_type === 'semester' ? 'none' : 'inline-flex');
+      document.getElementById('planMeta').textContent = [plan.teacher ? '教师：'+plan.teacher : '', plan.learned_hours+' / '+plan.total_hours+' 学时'].filter(Boolean).join(' · ');
+      document.getElementById('progressText').textContent = plan.progress + '%';
+      document.getElementById('progressFill').style.width = plan.progress + '%';
+      document.getElementById('catalogHint').textContent = `${done}/${total} 知识点`;
+    }
+
+    function renderCatalog() {
+      const box = document.getElementById('catalog');
+      if (!coursesList.length) { box.innerHTML = '<div class="empty">暂无章节内容</div>'; return; }
+      box.innerHTML = coursesList.map(co => {
+        const coDone = (co.chapters||[]).reduce((s,ch)=>s+ch.points.filter(p=>p.completed).length,0);
+        const coTotal = (co.chapters||[]).reduce((s,ch)=>s+ch.points.length,0);
+        const chaptersHtml = (co.chapters||[]).map(ch => {
+          const done = ch.points.filter(p => p.completed).length;
+          const pointsHtml = ch.points.map(p => `
+            <button class="point-item ${p.id===currentPointId?'active':''} ${p.completed?'done':''}" onclick="selectPoint(${p.id})">
+              <span class="point-check">${p.completed?'✓':''}</span><span>${escapeHtml(p.name)}</span>
+            </button>`).join('');
+          return `<div class="chapter open">
+            <div class="chapter-head" onclick="this.parentElement.classList.toggle('open')">
+              <span class="chapter-toggle">▶</span><span>${escapeHtml(ch.name)}</span>
+              <span class="chapter-count">${done}/${ch.points.length}</span>
+            </div>
+            <div class="chapter-body">${pointsHtml}
+              <button class="quiz-entry" onclick="openQuiz('chapter',${ch.id},'${escapeAttr(ch.name)} · 章节测验')"><span class="quiz-ic">题</span><span>章节测验</span></button>
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="cat-course">
+          <div class="cat-course-head" onclick="this.nextElementSibling.classList.toggle('open')">
+            <span class="chapter-toggle">▶</span><span>${escapeHtml(co.course_name)}</span>
+            <span class="chapter-count">${coDone}/${coTotal}</span>
+          </div>
+          <div class="cat-course-body open">${chaptersHtml || '<div class="empty">该课程暂无已选章节</div>'}</div>
+        </div>`;
+      }).join('') + `
+        <div class="course-quiz">
+          <button class="quiz-entry" onclick="openQuiz('course',null,'${escapeAttr(document.getElementById('planName').textContent)} · 课程综合测验')"><span class="quiz-ic">题</span><span>课程综合测验</span></button>
+        </div>`;
+    }
+
+    function selectPoint(id, silent) {
+      currentPointId = id;
+      const p = flatPoints.find(x => x.id === id); if (!p) return;
+      document.getElementById('contentTitle').textContent = p.name;
+      document.getElementById('contentMeta').textContent = [p.courseName, p.chapterName, (p.completed ? '已完成' : '未完成')].filter(Boolean).join(' · ');
+      document.getElementById('contentBody').innerHTML = renderContent(p);
+      document.getElementById('doneBtn').textContent = p.completed ? '取消完成' : '标记完成';
+      renderCatalog();
+    }
+
+    function renderContent(p) {
+      const steps = (p.operation_steps||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+      const safety = (p.safety_points||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+      const links = (p.resource_links||[]).map(l => `<div class="res-link">📎 ${escapeHtml(typeof l==='string'?l:(l.name||l.url||l))}</div>`).join('');
+      const hasContent = p.task_description || steps || links;
+      return `
+        ${p.task_description ? `<div class="card"><h3>任务描述</h3><p>${escapeHtml(p.task_description)}</p></div>` : ''}
+        ${p.work_scenario ? `<div class="card"><h3>工作情境</h3><p>${escapeHtml(p.work_scenario)}</p></div>` : ''}
+        ${steps ? `<div class="card"><h3>操作步骤</h3><ul>${steps}</ul></div>` : ''}
+        ${safety ? `<div class="card"><h3>安全要点</h3><ul>${safety}</ul></div>` : ''}
+        ${links ? `<div class="card"><h3>教学资源</h3>${links}</div>` : ''}
+        ${!hasContent ? '<div class="empty">该知识点暂无学习内容</div>' : ''}
+        <button class="btn btn-quiz" onclick="openQuiz('point',${p.id},'${escapeAttr(p.name)} · 随堂练习')">📝 随堂练习</button>
+      `;
+    }
+
+    async function toggleDone() {
+      const p = flatPoints.find(x => x.id === currentPointId); if (!p) return;
+      const completed = !p.completed;
+      try {
+        const r = await fetch(`/api/learning-plans/${planId}/progress`, { method:'POST', headers:jsonHeaders(), body:JSON.stringify({node_id: p.id, completed}) });
+        const d = await r.json();
+        if (d.ok) { showToast(completed ? '已标记完成' : '已取消完成'); loadDetail(); }
+        else showToast(d.error || '操作失败');
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    // ===== 测验逻辑 =====
+    async function openQuiz(scope, nodeId, title) {
+      const qs = `plan_id=${planId}&scope=${scope}` + (nodeId ? `&node_id=${nodeId}` : '');
+      document.getElementById('quizTitle').textContent = title;
+      document.getElementById('quizBody').innerHTML = '<div class="empty">加载中...</div>';
+      document.getElementById('quizSubmitBtn').style.display = 'inline-flex';
+      document.getElementById('quizModal').classList.add('show');
+      try {
+        const r = await fetch(`/api/assessments/start?${qs}`); const d = await r.json();
+        if (!d.ok) { document.getElementById('quizBody').innerHTML = `<div class="empty">${escapeHtml(d.error||'加载失败')}</div>`; document.getElementById('quizSubmitBtn').style.display='none'; return; }
+        document.getElementById('quizSub').textContent = `共 ${d.total} 题 · ${d.scope_label}`;
+        quiz = { scope, node_id: nodeId, questions: d.questions, title };
+        renderQuestions();
+      } catch(e) { document.getElementById('quizBody').innerHTML = '<div class="empty">网络错误</div>'; }
+    }
+
+    const TYPE_LABEL = { single:'单选题', multiple:'多选题', judgment:'判断题', short:'简答题' };
+    const JUDGE_OPTIONS = [['正确'],['错误']];
+
+    function renderQuestions() {
+      document.getElementById('quizBody').innerHTML = quiz.questions.map((q, qi) => `
+        <div class="quiz-q-item" data-qid="${q.id}">
+          <span class="quiz-q-num">第 ${qi+1} 题 · ${TYPE_LABEL[q.question_type]||q.question_type}</span>
+          <div class="quiz-q-text">${escapeHtml(q.stem)}</div>
+          ${(q.question_type==='judgment' ? JUDGE_OPTIONS : q.options||[]).map((opt, oi) => `
+            <label class="quiz-opt">
+              <input type="${q.question_type==='multiple'?'checkbox':'radio'}" name="q${q.id}" value="${escapeAttr(opt)}">
+              <span>${escapeHtml(opt)}</span>
+            </label>`).join('')}
+        </div>`).join('');
+    }
+
+    async function submitQuiz() {
+      const answers = [];
+      for (const q of quiz.questions) {
+        const sel = document.querySelectorAll(`input[name="q${q.id}"]:checked`);
+        const chosen = Array.from(sel).map(i => i.value);
+        if (!chosen.length) { showToast('请完成全部题目再提交'); return; }
+        answers.push({ question_id: q.id, chosen });
+      }
+      try {
+        const r = await fetch('/api/assessments/submit', { method:'POST', headers:jsonHeaders(), body:JSON.stringify({
+          plan_id: planId, scope: quiz.scope, node_id: quiz.node_id, answers,
+        })});
+        const d = await r.json();
+        if (!d.ok) { showToast(d.error || '提交失败'); return; }
+        // 展示结果（全部正确才 pass）
+        const allRight = d.run.score === d.run.total;
+        document.getElementById('quizBody').innerHTML = `
+          <div class="quiz-result-box ${allRight?'pass':'fail'}">
+            ${allRight ? '🎉 全部正确！' : '已提交'} · 得分 ${d.run.score}/${d.run.total} · 答对 ${d.run.correct_count} 题 · 答错 ${d.run.wrong_count} 题
+          </div>
+          <div style="margin-top:14px;color:var(--muted);font-size:13px;">成绩已计入学习档案，可前往「学习档案」查看详细答题解析。</div>`;
+        document.getElementById('quizSubmitBtn').style.display = 'none';
+        document.getElementById('quizSub').textContent = '提交完成';
+      } catch(e) { showToast('网络错误'); }
+    }
+
+    function hideQuiz() { document.getElementById('quizModal').classList.remove('show'); quiz = null; }
+    function closeModal(e,id) { if(e.target.id===id) hideQuiz(); }
+
+    function goNext() {
+      const idx = flatPoints.findIndex(p => p.id === currentPointId);
+      const next = flatPoints[idx + 1];
+      if (next) selectPoint(next.id); else showToast('已经是最后一节');
+    }
+    function goPrev() {
+      const idx = flatPoints.findIndex(p => p.id === currentPointId);
+      const prev = flatPoints[Math.max(0, idx - 1)];
+      if (prev) selectPoint(prev.id); else showToast('已经是第一节');
+    }
+
+    function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    if (!planId) { document.getElementById('contentBody').innerHTML = '<div class="empty">缺少计划参数</div>'; } else loadDetail();
+  </script>
+</body>
+</html>

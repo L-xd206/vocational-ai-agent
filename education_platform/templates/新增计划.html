@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新增计划</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --blue-deep:#2563EB; --ink:#1f2d3d; --muted:#8c9aab; --line:#e8eef5; --white:#fff; --shadow:0 8px 24px rgba(29,45,74,.06); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:18px 22px 16px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.45),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.32),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .page-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; padding-left:132px; min-height:34px; flex-shrink:0; }
+    .back-btn { position:fixed; top:18px; left:22px; z-index:120; height:34px; padding:0 12px; border:1px solid #dfe7f2; border-radius:8px; background:rgba(255,255,255,.96); color:#43516a; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; text-decoration:none; box-shadow:0 6px 18px rgba(29,45,74,.1); }
+    .back-btn:hover { border-color:#91caff; color:var(--blue); }
+    .page-head h1 { font-size:21px; font-weight:700; }
+    .btn { height:36px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 15px; border:1px solid #DDE8F4; border-radius:11px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.18s ease; box-shadow:0 5px 16px rgba(33,51,84,.05); }
+    .btn:hover { transform:translateY(-1px); border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; box-shadow:0 10px 22px rgba(37,99,235,.22); }
+    .btn-ghost { border-color:#DDE8F4; background:#fff; }
+    .btn-sm { height:28px; padding:0 10px; font-size:12px; border-radius:8px; }
+    .panel { background:var(--white); border:1px solid #edf1f7; border-radius:12px; padding:18px; box-shadow:var(--shadow); margin-bottom:10px; }
+    .panel-title { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:800; color:#2c3e50; margin-bottom:14px; }
+    .panel-title::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--blue); }
+    .panel-title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+    .panel-title-row .panel-title { margin-bottom:0; }
+
+    .setup-stage { flex:1; min-height:0; display:flex; gap:12px; }
+    .mode-side { width:200px; flex-shrink:0; }
+    .mode-grid { display:flex; flex-direction:column; gap:8px; }
+    .mode-card { padding:14px 12px; border:1px solid var(--line); border-radius:10px; background:#FBFDFF; cursor:pointer; font-size:14px; font-weight:700; color:#43516A; transition:.16s; }
+    .mode-card:hover { border-color:#B8C8DF; }
+    .mode-card.active { border-color:var(--blue); background:#EFF6FF; color:var(--blue-deep); }
+    .select-side { flex:1; min-width:0; display:flex; }
+    .section-body { flex:1; display:none; flex-direction:column; min-width:0; }
+    .section-body.show { display:flex; }
+    .search-row { margin-bottom:10px; }
+    .search-input { width:100%; height:36px; padding:0 12px; border:1px solid #DDE8F4; border-radius:11px; background:#FBFDFF; color:#25324A; font-size:13px; font-family:inherit; outline:none; }
+    .search-input:focus { border-color:#93C5FD; box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+    .option-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+    .option-item { padding:12px; border:1px solid var(--line); border-radius:10px; cursor:pointer; transition:.15s; }
+    .option-item:hover { border-color:#B8C8DF; }
+    .option-item.active { border-color:var(--blue); background:#EFF6FF; }
+    .option-item .name { font-size:14px; font-weight:700; color:#1f2d3d; }
+    .option-item .sub { font-size:12px; color:var(--muted); margin-top:3px; }
+    .empty-tip { padding:30px 0; text-align:center; color:var(--muted); font-size:13px; }
+
+    /* AI 聊天 */
+    .ai-chat { flex:1; min-height:0; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .ai-chat-list { flex:1; min-height:0; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
+    .chat-row { display:flex; gap:8px; }
+    .chat-row.user { flex-direction:row-reverse; }
+    .chat-avatar { width:30px; height:30px; border-radius:8px; background:#EFF6FF; color:var(--blue); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0; }
+    .chat-row.user .chat-avatar { background:#E0EAFF; color:#43516A; }
+    .chat-bubble { max-width:76%; padding:9px 12px; border-radius:10px; background:#F5F8FC; font-size:13px; line-height:1.6; color:#33415C; }
+    .chat-row.user .chat-bubble { background:#EFF6FF; color:#1f2d3d; }
+    .chat-bubble.typing { color:var(--muted); }
+    .ai-chat-input { display:flex; gap:8px; padding:10px; border-top:1px solid var(--line); }
+    .ai-chat-input textarea { flex:1; height:38px; padding:8px 12px; border:1px solid #DDE8F4; border-radius:10px; font-size:13px; font-family:inherit; resize:none; outline:none; }
+
+    /* 预览 */
+    .preview-stage { flex:1; min-height:0; display:flex; flex-direction:column; }
+    .preview-stage.hidden { display:none; }
+    .preview-actions { display:flex; gap:8px; }
+    .course-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+    .tree-course { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    .tree-course-head { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#FAFCFE; cursor:pointer; }
+    .tree-toggle { width:20px; height:20px; border:none; background:transparent; color:#8a9bb0; cursor:pointer; font-size:16px; }
+    .tree-course.open .tree-toggle { transform:rotate(90deg); }
+    .order-btns { display:flex; flex-direction:column; gap:2px; }
+    .order-btn { width:18px; height:16px; border:1px solid #DDE8F4; border-radius:4px; background:#fff; color:#8a9bb0; cursor:pointer; font-size:9px; line-height:1; }
+    .order-btn:disabled { opacity:.35; cursor:default; }
+    .course-check { accent-color:#3B82F6; }
+    .course-main { flex:1; min-width:0; }
+    .course-title-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .course-name { font-size:14px; font-weight:800; color:#1f2d3d; }
+    .course-meta { display:flex; gap:6px; flex-wrap:wrap; }
+    .chip { display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; background:#F1F5F9; color:#64748b; }
+    .chip.ai { background:#F5F3FF; color:#7c3aed; }
+    .chip.self { background:#F0FDF4; color:#16a34a; }
+    .chip.job { background:#EFF6FF; color:#2563EB; }
+    .row-actions { display:flex; gap:4px; }
+    .mini-icon-btn { width:24px; height:24px; border:none; border-radius:6px; background:transparent; color:#8a9bb0; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+    .mini-icon-btn:hover { background:#F0F4F9; }
+    .mini-icon-btn.danger:hover { background:#FEF2F2; color:#EF4444; }
+    .mini-icon-btn svg { width:14px; height:14px; }
+    .tree-body { display:none; padding:2px 12px 12px 40px; }
+    .tree-course.open .tree-body { display:block; }
+    .tree-chapter { margin-top:8px; }
+    .tree-chapter-head { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; font-weight:800; color:#475569; }
+    .tree-point { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:5px 8px; margin:3px 0; border-radius:6px; font-size:12px; }
+    .tree-point:hover { background:#F8FBFF; }
+    .tree-point-name { font-weight:600; color:#33415C; }
+    .tree-point-desc { font-size:11px; color:var(--muted); margin-top:1px; }
+    .result-hint { font-size:11px; color:var(--muted); padding:4px 0; }
+    .footer-bar { display:flex; justify-content:flex-end; gap:10px; padding-top:14px; border-top:1px solid #EEF3F8; margin-top:14px; }
+
+    /* 弹窗 */
+    .modal-mask { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(18,28,45,.42); backdrop-filter:blur(5px); }
+    .modal-mask.show { display:flex; }
+    .modal { width:560px; max-width:94vw; overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 30px 80px rgba(16,30,54,.24); animation:modalIn .2s ease-out; }
+    @keyframes modalIn { from{opacity:0;transform:translateY(12px)scale(.98)} to{opacity:1;transform:translateY(0)scale(1)} }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:linear-gradient(135deg,#F7FBFF,#EEF6FF); border-bottom:1px solid #E7EEF8; }
+    .modal-title { font-size:16px; font-weight:800; color:#1F2D44; }
+    .modal-close { width:32px; height:32px; border:none; border-radius:9px; background:#fff; color:#8A98AF; cursor:pointer; font-size:18px; }
+    .modal-body { padding:18px 20px; max-height:62vh; overflow-y:auto; }
+    .modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px 18px; border-top:1px solid #EEF3F8; }
+
+    .path-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .path-card { padding:14px; border:1px solid var(--line); border-radius:11px; background:#FBFDFF; cursor:pointer; text-align:left; font-family:inherit; transition:.15s; }
+    .path-card:hover { border-color:#93C5FD; }
+    .path-card-title { font-size:14px; font-weight:800; color:#1f2d3d; margin-bottom:5px; }
+    .path-card-desc { font-size:12px; color:var(--muted); line-height:1.5; }
+    .path-hint { font-size:13px; color:#475569; font-weight:600; }
+
+    .pick-modal { width:760px; max-width:95vw; }
+    .pick-layout { display:flex; gap:12px; }
+    .pick-layout.chapter-only .pick-left { display:none; }
+    .pick-left { width:230px; flex-shrink:0; display:flex; flex-direction:column; gap:8px; }
+    .pick-course-list { flex:1; min-height:0; max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+    .pick-course-item { padding:10px; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:13px; font-weight:700; color:#33415C; }
+    .pick-course-item.active { border-color:var(--blue); background:#EFF6FF; }
+    .pick-point-panel { flex:1; min-width:0; }
+    .pick-point-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .pick-point-toolbar .hint { font-size:12px; color:var(--muted); font-weight:600; }
+    .pick-chapter { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:8px; }
+    .pick-chapter-title { font-size:13px; font-weight:800; color:#475569; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; }
+    .pick-point-item { display:flex; gap:8px; padding:5px 6px; font-size:12px; color:#33415C; cursor:pointer; border-radius:6px; }
+    .pick-point-item:hover { background:#F8FBFF; }
+    .pick-point-item input { accent-color:#3B82F6; margin-top:2px; }
+    .pick-point-name { font-weight:600; }
+    .pick-point-desc { font-size:11px; color:var(--muted); }
+
+    .test-meta { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:12px; }
+    .test-q { margin-bottom:14px; }
+    .test-q-stem { font-size:13px; font-weight:700; color:#1f2d3d; margin-bottom:6px; }
+    .test-opt { display:flex; gap:8px; align-items:center; padding:5px 8px; font-size:13px; color:#33415C; cursor:pointer; border-radius:6px; }
+    .test-opt:hover { background:#F8FBFF; }
+    .test-opt input { accent-color:#3B82F6; }
+
+    .toast { position:fixed; right:22px; top:22px; z-index:120; padding:12px 18px; border-radius:12px; background:#172033; color:#fff; font-size:13px; font-weight:700; opacity:0; transform:translateY(-12px); transition:.25s ease; pointer-events:none; }
+    .toast.show { opacity:1; transform:translateY(0); }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <div class="page-head">
+    <a class="back-btn" href="学习计划.html">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+      返回学习计划
+    </a>
+    <h1>新增计划</h1>
+  </div>
+
+  <div class="setup-stage" id="setupStage">
+    <aside class="mode-side panel">
+      <div class="panel-title">选择创建方式</div>
+      <div class="mode-grid">
+        <div class="mode-card active" data-mode="job" onclick="switchMode('job')">按岗位创建</div>
+        <div class="mode-card" data-mode="course" onclick="switchMode('course')">按课程创建</div>
+        <div class="mode-card" data-mode="ai" onclick="switchMode('ai')">AI 目标推荐</div>
+      </div>
+    </aside>
+
+    <section class="select-side panel">
+      <div class="section-body show" id="sectionJob">
+        <div class="panel-title">选择岗位</div>
+        <div class="search-row"><input class="search-input" id="jobSearch" placeholder="搜索岗位名称" oninput="renderJobOptions()"></div>
+        <div class="option-list" id="jobList"><div class="empty-tip">加载中...</div></div>
+      </div>
+
+      <div class="section-body" id="sectionCourse">
+        <div class="panel-title">选择课程</div>
+        <div class="search-row"><input class="search-input" id="courseSearch" placeholder="搜索课程名称" oninput="renderCourseOptions()"></div>
+        <div class="option-list" id="courseOptionList"><div class="empty-tip">加载中...</div></div>
+      </div>
+
+      <div class="section-body" id="sectionAi">
+        <div class="panel-title">AI 目标推荐</div>
+        <div class="ai-chat">
+          <div class="ai-chat-list" id="aiChatList">
+            <div class="chat-row ai">
+              <div class="chat-avatar">AI</div>
+              <div class="chat-bubble">你好！可以先聊聊你的学习目标、基础情况和时间安排。聊得差不多后，点右侧「生成计划」，我会据此为你匹配课程。</div>
+            </div>
+          </div>
+          <div class="ai-chat-input">
+            <textarea id="goalInput" rows="1" placeholder="继续和我聊聊你的目标，按 Enter 发送" onkeydown="handleAiChatKey(event)"></textarea>
+            <button class="btn btn-ghost" type="button" onclick="sendAiMessage()">发送</button>
+            <button class="btn btn-primary" type="button" onclick="generateAiPlan()">生成计划</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel preview-stage hidden" id="resultPanel">
+    <div class="panel-title-row">
+      <div class="panel-title">学习内容预览（课程 → 章节 → 知识点）</div>
+      <div class="preview-actions">
+        <button class="btn btn-sm btn-ghost" type="button" onclick="openAddCoursePicker()">添加课程</button>
+        <button class="btn btn-sm btn-primary" type="button" onclick="restartPlan()">重新计划</button>
+      </div>
+    </div>
+    <div class="course-list" id="coursePreviewList"><div class="empty-tip">暂无内容，请在上方完成选择或推荐</div></div>
+    <div class="footer-bar">
+      <button class="btn" type="button" onclick="location.href='学习计划.html'">取消</button>
+      <button class="btn btn-primary" type="button" onclick="confirmAddPlans()">将所选内容加入计划</button>
+    </div>
+  </section>
+
+  <!-- 添加课程 / 添加章节知识点 -->
+  <div class="modal-mask" id="pickModal" onclick="if(event.target===this)closePickModal()">
+    <div class="modal pick-modal" role="dialog">
+      <div class="modal-head">
+        <div class="modal-title" id="pickModalTitle">添加课程</div>
+        <button class="modal-close" type="button" onclick="closePickModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="pick-layout" id="pickLayout">
+          <div class="pick-left">
+            <input class="search-input" id="pickCourseSearch" placeholder="搜索课程名称" oninput="renderPickCourseList()">
+            <div class="pick-course-list" id="pickCourseList"></div>
+          </div>
+          <div class="pick-point-panel" id="pickPointPanel"><div class="empty-tip">请先选择左侧课程</div></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" type="button" onclick="closePickModal()">取消</button>
+        <button class="btn btn-primary" type="button" id="pickConfirmBtn" onclick="confirmPickCourse()">确定添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 学习起点 -->
+  <div class="modal-mask" id="pathModal" onclick="if(event.target===this)closePathModal()">
+    <div class="modal" role="dialog" style="width:min(560px,94vw)">
+      <div class="modal-head">
+        <div class="modal-title">选择学习起点</div>
+        <button class="modal-close" type="button" onclick="closePathModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="path-hint" id="pathHint" style="margin:0 0 12px;">已匹配课程，请选择学习方式</div>
+        <div class="path-grid">
+          <button class="path-card" type="button" onclick="chooseZeroBase()">
+            <div class="path-card-title">0 基础学习</div>
+            <div class="path-card-desc">按默认完整课程与知识点直接生成学习计划，适合零基础系统入门。</div>
+          </button>
+          <button class="path-card" type="button" onclick="choosePlacementTest()">
+            <div class="path-card-title">测试摸底</div>
+            <div class="path-card-desc">先完成一份摸底试卷，AI 根据答题结果推荐更合适的课程与知识点。</div>
+          </button>
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" type="button" onclick="closePathModal()">取消</button></div>
+    </div>
+  </div>
+
+  <!-- 摸底测试卷 -->
+  <div class="modal-mask" id="testModal" onclick="if(event.target===this)closeTestModal()">
+    <div class="modal" role="dialog" style="width:min(680px,94vw)">
+      <div class="modal-head">
+        <div class="modal-title">摸底测试</div>
+        <button class="modal-close" type="button" onclick="closeTestModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="test-meta"><span id="testMeta">共 0 题</span><span>提交后由 AI 生成推荐计划</span></div>
+        <div id="testQuestionList"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" type="button" onclick="backToPathModal()">返回重选</button>
+        <button class="btn btn-primary" type="button" onclick="submitPlacementTest()">提交并生成推荐</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+
+    const ICONS = {
+      add: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>',
+      del: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>'
+    };
+
+    let library = [];          // 课程库
+    let jobs = [];             // 岗位列表
+    let planCourses = [];      // 预览中的课程（含 source）
+    let currentMode = 'job';
+    let selectedJobId = null;
+    let selectedCourseIds = new Set();
+    let openCourseIds = new Set();
+    let previewChecked = new Set();   // 勾选的知识点 id
+    let pendingCourses = [];          // 学习起点待生成课程
+    let placementQuestions = [];
+    let aiChatHistory = [];
+    let aiChatBusy = false;
+    let pickCourseId = null, pickChapterId = null, pickMode = 'course';
+    let pickCheckedPoints = new Set(), pickLockCourse = false;
+
+    function escapeHtml(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+    function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+    function libraryById(cid){return library.find(c=>c.course_id===cid);}
+    function cloneCourse(cid, source){const base=libraryById(cid);if(!base)return null;return {...JSON.parse(JSON.stringify(base)), source};}
+    function coursePointIds(c){return (c.chapters||[]).flatMap(ch=>(ch.points||[]).map(p=>p.id));}
+    function countPoints(c){return coursePointIds(c).length;}
+    function findCourse(cid){return planCourses.find(c=>c.course_id===cid)||null;}
+    function findChapter(cid, chid){const c=findCourse(cid);return c?(c.chapters||[]).find(ch=>ch.chapter_id===chid):null;}
+
+    async function loadLibrary(){
+      try{
+        const r = await fetch('/api/learning-plans/course-library'); const d = await r.json();
+        if(d.ok){ library = d.library||[]; }
+      }catch(e){ console.error(e); }
+    }
+    async function loadJobs(){
+      try{
+        const r = await fetch('/api/learning-plans/job-options'); const d = await r.json();
+        if(d.ok){ jobs = d.jobs||[]; }
+      }catch(e){ console.error(e); }
+      renderJobOptions();
+    }
+
+    // ===== 阶段切换 =====
+    function showSetupStage(){ document.getElementById('setupStage').classList.remove('hidden'); document.getElementById('setupStage').style.display='flex'; const p=document.getElementById('resultPanel'); p.classList.add('hidden'); }
+    function showPreviewStage(){ document.getElementById('setupStage').style.display='none'; const p=document.getElementById('resultPanel'); p.classList.remove('hidden'); }
+
+    function switchMode(mode){
+      currentMode = mode;
+      document.querySelectorAll('.mode-card').forEach(el=>el.classList.toggle('active', el.dataset.mode===mode));
+      document.getElementById('sectionJob').classList.toggle('show', mode==='job');
+      document.getElementById('sectionCourse').classList.toggle('show', mode==='course');
+      document.getElementById('sectionAi').classList.toggle('show', mode==='ai');
+      if(mode==='ai') setTimeout(()=>document.getElementById('goalInput')?.focus(),50);
+    }
+
+    function restartPlan(){
+      planCourses=[]; previewChecked=new Set(); openCourseIds=new Set();
+      pendingCourses=[]; placementQuestions=[]; selectedJobId=null; selectedCourseIds=new Set();
+      aiChatHistory=[]; aiChatBusy=false;
+      document.getElementById('aiChatList').innerHTML = '<div class="chat-row ai"><div class="chat-avatar">AI</div><div class="chat-bubble">你好！可以先聊聊你的学习目标、基础情况和时间安排。聊得差不多后，点右侧「生成计划」，我会据此为你匹配课程。</div></div>';
+      renderJobOptions(); renderCourseOptions(); renderPreview(); showSetupStage();
+      showToast('已返回重新计划');
+    }
+
+    // ===== 按岗位 =====
+    function renderJobOptions(){
+      const key=(document.getElementById('jobSearch').value||'').trim().toLowerCase();
+      const list = jobs.filter(j=>!key || j.job_name.toLowerCase().includes(key) || j.industry.toLowerCase().includes(key));
+      document.getElementById('jobList').innerHTML = list.map(j=>`
+        <div class="option-item ${selectedJobId===j.job_id?'active':''}" onclick="selectJob(${j.job_id})">
+          <div class="name">${escapeHtml(j.job_name)}</div>
+          <div class="sub">${escapeHtml(j.industry)} · ${j.course_count} 门课程 · ${j.point_count} 个知识点</div>
+        </div>`).join('') || '<div class="empty-tip">未找到匹配岗位</div>';
+    }
+
+    function selectJob(jobId){
+      selectedJobId = jobId;
+      const job = jobs.find(j=>j.job_id===jobId); if(!job) return;
+      const courses = job.course_ids.map(cid=>cloneCourse(cid,'job')).filter(Boolean);
+      renderJobOptions();
+      proposePlan(courses, `岗位「${job.job_name}」已匹配 ${courses.length} 门课程`);
+    }
+
+    // ===== 按课程 =====
+    function renderCourseOptions(){
+      const key=(document.getElementById('courseSearch').value||'').trim().toLowerCase();
+      const list = library.filter(c=>!key || c.course_name.toLowerCase().includes(key) || c.course_type.toLowerCase().includes(key));
+      document.getElementById('courseOptionList').innerHTML = list.map(c=>`
+        <div class="option-item ${selectedCourseIds.has(c.course_id)?'active':''}" onclick="toggleCourseOption(${c.course_id})">
+          <div class="name">${escapeHtml(c.course_name)}</div>
+          <div class="sub">${escapeHtml(c.course_type)} · ${c.hours} 学时 · ${countPoints(c)} 个知识点</div>
+        </div>`).join('') || '<div class="empty-tip">未找到匹配课程</div>';
+    }
+
+    function toggleCourseOption(cid){
+      selectedCourseIds = new Set([cid]);
+      renderCourseOptions();
+      const course = cloneCourse(cid,'course'); if(!course) return showToast('未找到课程');
+      proposePlan([course], `已选择课程「${course.course_name}」`);
+    }
+
+    // ===== AI 目标推荐 =====
+    function appendChatMessage(role, text, extraClass){
+      const list=document.getElementById('aiChatList');
+      const row=document.createElement('div'); row.className='chat-row '+role+(extraClass?' '+extraClass:'');
+      row.innerHTML = `<div class="chat-avatar">${role==='ai'?'AI':'我'}</div><div class="chat-bubble">${escapeHtml(text)}</div>`;
+      list.appendChild(row); list.scrollTop=list.scrollHeight; return row;
+    }
+    function handleAiChatKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAiMessage(); } }
+
+    async function sendAiMessage(){
+      if(aiChatBusy) return;
+      const input=document.getElementById('goalInput');
+      const goal=(input.value||'').trim();
+      if(!goal){ input.focus(); return showToast('请先输入内容'); }
+      aiChatHistory.push({role:'user',text:goal});
+      appendChatMessage('user', goal);
+      input.value=''; aiChatBusy=true;
+      const typing=appendChatMessage('ai','正在思考…','typing');
+      try{
+        const r=await fetch('/api/learning-ai/chat',{method:'POST',headers:jsonHeaders(),body:JSON.stringify({message:goal, history:aiChatHistory.slice(0,-1)})});
+        const d=await r.json();
+        typing.remove();
+        const reply = d.ok ? d.reply : (d.error||'抱歉，稍后再试');
+        aiChatHistory.push({role:'ai',text:reply});
+        appendChatMessage('ai', reply);
+      }catch(e){ typing.remove(); appendChatMessage('ai','网络错误'); }
+      aiChatBusy=false; input.focus();
+    }
+
+    async function generateAiPlan(){
+      if(aiChatBusy) return showToast('请稍等，AI 还在回复中');
+      const draft=(document.getElementById('goalInput').value||'').trim();
+      if(!aiChatHistory.some(m=>m.role==='user') && !draft) return showToast('请先和 AI 聊几句学习目标，再生成计划');
+      if(draft){ aiChatHistory.push({role:'user',text:draft}); appendChatMessage('user',draft); document.getElementById('goalInput').value=''; }
+      aiChatBusy=true;
+      const typing=appendChatMessage('ai','正在根据对话生成课程计划…','typing');
+      try{
+        const r=await fetch('/api/learning-ai/plan-from-chat',{method:'POST',headers:jsonHeaders(),body:JSON.stringify({history:aiChatHistory})});
+        const d=await r.json();
+        typing.remove();
+        if(!d.ok){ aiChatHistory.push({role:'ai',text:d.error||'生成失败'}); appendChatMessage('ai',d.error||'生成失败'); aiChatBusy=false; return; }
+        const picks=(d.courses||[]).map(c=>cloneCourse(c.course_id,'ai')).filter(Boolean);
+        const names=picks.map(c=>c.course_name).join('、');
+        aiChatHistory.push({role:'ai',text:`已根据对话为你匹配 ${picks.length} 门课程：${names}。请选择学习起点继续。`});
+        appendChatMessage('ai',`已根据对话为你匹配 ${picks.length} 门课程：${names}。请选择学习起点继续。`);
+        proposePlan(picks, `AI 已根据对话匹配 ${picks.length} 门课程`);
+      }catch(e){ typing.remove(); appendChatMessage('ai','网络错误'); }
+      aiChatBusy=false;
+    }
+
+    // ===== 学习起点 =====
+    function proposePlan(courses, hintText){
+      pendingCourses = JSON.parse(JSON.stringify(courses||[]));
+      if(!pendingCourses.length) return showToast('暂无可生成的课程');
+      document.getElementById('pathHint').textContent = hintText||'已匹配课程，请选择学习方式';
+      document.getElementById('pathModal').classList.add('show');
+    }
+    function closePathModal(){ document.getElementById('pathModal').classList.remove('show'); }
+
+    function applyDefaultPlan(courses, source, toastMsg){
+      planCourses = JSON.parse(JSON.stringify(courses||[])).map(c=>{
+        c.source = c.source || source || 'course';
+        return c;
+      });
+      previewChecked = new Set(planCourses.flatMap(c=>coursePointIds(c)));
+      openCourseIds = new Set(planCourses.map(c=>c.course_id));
+      renderPreview(); showPreviewStage();
+      if(toastMsg) showToast(toastMsg);
+    }
+
+    function chooseZeroBase(){
+      if(!pendingCourses.length) return showToast('暂无待生成课程');
+      closePathModal();
+      applyDefaultPlan(pendingCourses, pendingCourses[0]?.source, '已按 0 基础默认生成学习计划');
+    }
+
+    async function choosePlacementTest(){
+      if(!pendingCourses.length) return showToast('暂无待生成课程');
+      const course_ids = pendingCourses.map(c=>c.course_id);
+      closePathModal();
+      try{
+        const r=await fetch('/api/learning-plans/placement',{method:'POST',headers:jsonHeaders(),body:JSON.stringify({course_ids})});
+        const d=await r.json();
+        if(!d.ok){ applyDefaultPlan(pendingCourses, pendingCourses[0]?.source, d.error||'题目不足，已按默认生成'); return; }
+        placementQuestions = d.questions||[];
+        openTestModal();
+      }catch(e){ applyDefaultPlan(pendingCourses, pendingCourses[0]?.source, '题目不足，已按默认生成'); }
+    }
+
+    function openTestModal(){
+      document.getElementById('testMeta').textContent = `共 ${placementQuestions.length} 题`;
+      document.getElementById('testQuestionList').innerHTML = placementQuestions.map((q,qi)=>`
+        <div class="test-q">
+          <div class="test-q-stem">${qi+1}. ${escapeHtml(q.stem)}</div>
+          ${(q.options||[]).map((opt,oi)=>`
+            <label class="test-opt"><input type="radio" name="tq-${q.question_id}" value="${oi}"><span>${escapeHtml(opt)}</span></label>
+          `).join('')}
+        </div>`).join('');
+      document.getElementById('testModal').classList.add('show');
+    }
+    function closeTestModal(){ document.getElementById('testModal').classList.remove('show'); }
+    function backToPathModal(){ closeTestModal(); document.getElementById('pathModal').classList.add('show'); }
+
+    async function submitPlacementTest(){
+      const answered=[];
+      let ok=true;
+      placementQuestions.forEach(q=>{
+        const checked=document.querySelector(`input[name="tq-${q.question_id}"]:checked`);
+        if(!checked){ ok=false; return; }
+        answered.push({question_id:q.question_id, chosen_index:Number(checked.value)});
+      });
+      if(!ok) return showToast('请完成全部题目后再提交');
+      const course_ids = pendingCourses.map(c=>c.course_id);
+      try{
+        const r=await fetch('/api/learning-plans/placement-submit',{method:'POST',headers:jsonHeaders(),body:JSON.stringify({course_ids, answered})});
+        const d=await r.json();
+        if(!d.ok){ return showToast(d.error||'提交失败'); }
+        closeTestModal();
+        applyDefaultPlan(d.courses||[], 'ai', `摸底完成（正确 ${d.correct}/${d.total}），已生成 AI 推荐计划`);
+      }catch(e){ showToast('网络错误'); }
+    }
+
+    // ===== 预览 =====
+    function actionBtn(kind, title, onclick, danger){
+      return `<button class="mini-icon-btn ${danger?'danger':''}" type="button" title="${title}" onclick="${onclick}">${ICONS[kind]}</button>`;
+    }
+
+    function isCourseFullyChecked(c){
+      const ids=coursePointIds(c); return ids.length>0 && ids.every(id=>previewChecked.has(id));
+    }
+
+    function toggleCourseOpen(cid, e){ if(e) e.stopPropagation(); if(openCourseIds.has(cid)) openCourseIds.delete(cid); else openCourseIds.add(cid); renderPreview(); }
+
+    function toggleCourseCheck(cid, checked){
+      const c=findCourse(cid); if(!c) return;
+      coursePointIds(c).forEach(id=>{ if(checked) previewChecked.add(id); else previewChecked.delete(id); });
+      renderPreview();
+    }
+
+    function moveCourse(cid, dir){
+      const list=planCourses.slice(); const i=list.findIndex(c=>c.course_id===cid);
+      const j=i+dir; if(i<0||j<0||j>=list.length) return;
+      [list[i],list[j]]=[list[j],list[i]]; planCourses=list; renderPreview();
+    }
+
+    function deleteCourse(cid, e){
+      if(e) e.stopPropagation();
+      const c=findCourse(cid); if(!c) return;
+      if(!confirm(`确定删除课程「${c.course_name}」及其全部章节与知识点？`)) return;
+      coursePointIds(c).forEach(id=>previewChecked.delete(id));
+      openCourseIds.delete(cid);
+      planCourses=planCourses.filter(x=>x.course_id!==cid);
+      if(currentMode==='course' && selectedCourseIds.has(cid)){ selectedCourseIds.delete(cid); renderCourseOptions(); }
+      showToast('课程已删除'); renderPreview();
+    }
+    function deleteChapter(cid, chid, e){
+      if(e) e.stopPropagation();
+      const c=findCourse(cid), ch=findChapter(cid,chid); if(!c||!ch) return;
+      if(!confirm(`确定删除章节「${ch.chapter_name}」及其知识点？`)) return;
+      ch.points.forEach(p=>previewChecked.delete(p.id));
+      c.chapters=(c.chapters||[]).filter(x=>x.chapter_id!==chid);
+      showToast('章节已删除'); renderPreview();
+    }
+    function deletePoint(cid, chid, pid, e){
+      if(e) e.stopPropagation();
+      const ch=findChapter(cid,chid); if(!ch) return;
+      const p=(ch.points||[]).find(x=>x.id===pid); if(!p) return;
+      if(!confirm(`确定删除知识点「${p.name}」？`)) return;
+      previewChecked.delete(pid);
+      ch.points=ch.points.filter(x=>x.id!==pid);
+      showToast('知识点已删除'); renderPreview();
+    }
+
+    function renderPreview(){
+      const list=planCourses;
+      const box=document.getElementById('coursePreviewList');
+      if(!list.length){ box.innerHTML='<div class="empty-tip">暂无内容，请先选择岗位或课程，或点击「添加课程」</div>'; return; }
+      box.innerHTML=list.map((c,index)=>{
+        const open=openCourseIds.has(c.course_id)?'open':'';
+        const chip = c.source==='ai' ? '<span class="chip ai">AI推荐</span>' : (c.source==='job'?'<span class="chip job">岗位原定</span>':'<span class="chip self">自主学习</span>');
+        const totalPoints=countPoints(c);
+        const checkedCount=coursePointIds(c).filter(id=>previewChecked.has(id)).length;
+        const chaptersHtml=(c.chapters||[]).map(ch=>`
+          <div class="tree-chapter">
+            <div class="tree-chapter-head">
+              <span>${escapeHtml(ch.chapter_name)}</span>
+              <span class="chip">${(ch.points||[]).length} 个知识点</span>
+              <div class="row-actions">
+                ${actionBtn('add','添加知识点',`event.stopPropagation();openAddChapterPointsPicker(${c.course_id},${ch.chapter_id})`)}
+                ${actionBtn('del','删除章节',`deleteChapter(${c.course_id},${ch.chapter_id},event)`,true)}
+              </div>
+            </div>
+            <div class="tree-points">
+              ${(ch.points||[]).map(p=>`
+                <div class="tree-point">
+                  <div class="tree-point-body">
+                    <div class="tree-point-name">${escapeHtml(p.name)}</div>
+                    ${p.desc?`<div class="tree-point-desc">${escapeHtml(p.desc)}</div>`:''}
+                  </div>
+                  <div class="row-actions">${actionBtn('del','删除知识点',`deletePoint(${c.course_id},${ch.chapter_id},${p.id},event)`,true)}</div>
+                </div>`).join('') || '<div class="result-hint">暂无知识点，点击章节右侧 + 添加</div>'}
+            </div>
+          </div>`).join('');
+        return `
+          <div class="tree-course ${open}" data-course="${c.course_id}">
+            <div class="tree-course-head" onclick="toggleCourseOpen(${c.course_id},event)">
+              <div class="order-btns" onclick="event.stopPropagation()">
+                <button class="order-btn" ${index===0?'disabled':''} onclick="moveCourse(${c.course_id},-1)">▲</button>
+                <button class="order-btn" ${index===list.length-1?'disabled':''} onclick="moveCourse(${c.course_id},1)">▼</button>
+              </div>
+              <button class="tree-toggle" onclick="toggleCourseOpen(${c.course_id},event)">›</button>
+              <input class="course-check" type="checkbox" ${isCourseFullyChecked(c)?'checked':''} onclick="event.stopPropagation();toggleCourseCheck(${c.course_id},this.checked)">
+              <div class="course-main">
+                <div class="course-title-row">
+                  <div class="course-name">${escapeHtml(c.course_name)}</div>
+                  <div class="course-meta">${chip}<span class="chip">${c.hours||0} 学时</span><span class="chip">${checkedCount}/${totalPoints} 知识点</span></div>
+                </div>
+              </div>
+              <div class="row-actions">
+                ${actionBtn('add','添加章节知识点',`event.stopPropagation();openAddCoursePicker(${c.course_id})`)}
+                ${actionBtn('del','删除课程',`deleteCourse(${c.course_id},event)`,true)}
+              </div>
+            </div>
+            <div class="tree-body">${chaptersHtml || '<div class="result-hint">暂无章节，点击课程右侧 + 从课程库补充</div>'}</div>
+          </div>`;
+      }).join('');
+    }
+
+    // ===== 添加课程 / 添加章节知识点 =====
+    function openAddCoursePicker(preselectCourseId){
+      pickMode='course'; pickChapterId=null; pickLockCourse=!!preselectCourseId;
+      pickCourseId=preselectCourseId||null; pickCheckedPoints=new Set();
+      const search=document.getElementById('pickCourseSearch'); if(search) search.value='';
+      document.getElementById('pickModalTitle').textContent='添加课程';
+      document.getElementById('pickConfirmBtn').textContent='确定添加';
+      document.getElementById('pickLayout').classList.remove('chapter-only');
+      if(preselectCourseId){
+        renderPickCourseList(); renderPickPoints();
+      }else{
+        renderPickCourseList();
+        document.getElementById('pickPointPanel').innerHTML='<div class="empty-tip">请先选择左侧课程</div>';
+      }
+      document.getElementById('pickModal').classList.add('show');
+    }
+
+    function openAddChapterPointsPicker(cid, chid){
+      const planCourse=findCourse(cid), planChapter=findChapter(cid,chid);
+      const catalogCourse=libraryById(cid);
+      if(!planCourse||!planChapter||!catalogCourse) return showToast('未找到对应课程或章节');
+      const catalogChapter=(catalogCourse.chapters||[]).find(ch=>ch.chapter_id===chid);
+      if(!catalogChapter) return showToast('课程库中无此章节，无法补充知识点');
+      const existingIds=new Set((planChapter.points||[]).map(p=>p.id));
+      const available=(catalogChapter.points||[]).filter(p=>!existingIds.has(p.id));
+      if(!available.length) return showToast('该章节下暂无未选择的知识点');
+      pickMode='chapter'; pickLockCourse=true; pickCourseId=cid; pickChapterId=chid; pickCheckedPoints=new Set();
+      document.getElementById('pickModalTitle').textContent=`添加知识点 · ${planChapter.chapter_name}`;
+      document.getElementById('pickConfirmBtn').textContent='确定添加';
+      document.getElementById('pickLayout').classList.add('chapter-only');
+      renderChapterPickPoints(catalogChapter, available);
+      document.getElementById('pickModal').classList.add('show');
+    }
+
+    function renderChapterPickPoints(catalogChapter, available){
+      const selectedCount=available.filter(p=>pickCheckedPoints.has(p.id)).length;
+      const allSelected=available.length>0 && available.every(p=>pickCheckedPoints.has(p.id));
+      document.getElementById('pickPointPanel').innerHTML=`
+        <div class="pick-point-toolbar">
+          <div class="hint">未选知识点 ${selectedCount}/${available.length}（已排除当前章节已有内容）</div>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="toggleChapterPickAll()">${allSelected?'取消全选':'全选'}</button>
+        </div>
+        <div class="pick-chapter">
+          <div class="pick-chapter-title"><span>${escapeHtml(catalogChapter.chapter_name)}</span></div>
+          ${available.map(p=>`
+            <label class="pick-point-item">
+              <input type="checkbox" ${pickCheckedPoints.has(p.id)?'checked':''} onchange="togglePickPoint(${p.id},this.checked)">
+              <div><div class="pick-point-name">${escapeHtml(p.name)}</div><div class="pick-point-desc">${escapeHtml(p.desc||'')}</div></div>
+            </label>`).join('')}
+        </div>`;
+    }
+
+    function toggleChapterPickAll(){
+      const catalogCourse=libraryById(pickCourseId);
+      const catalogChapter=catalogCourse&&(catalogCourse.chapters||[]).find(ch=>ch.chapter_id===pickChapterId);
+      const planChapter=findChapter(pickCourseId,pickChapterId);
+      if(!catalogChapter||!planChapter) return;
+      const existingIds=new Set((planChapter.points||[]).map(p=>p.id));
+      const available=(catalogChapter.points||[]).filter(p=>!existingIds.has(p.id));
+      const allOn=available.length>0 && available.every(p=>pickCheckedPoints.has(p.id));
+      available.forEach(p=>{ if(allOn) pickCheckedPoints.delete(p.id); else pickCheckedPoints.add(p.id); });
+      renderChapterPickPoints(catalogChapter, available);
+    }
+
+    function closePickModal(){
+      document.getElementById('pickModal').classList.remove('show');
+      pickCourseId=null; pickChapterId=null; pickMode='course'; pickLockCourse=false; pickCheckedPoints=new Set();
+      document.getElementById('pickLayout').classList.remove('chapter-only');
+    }
+
+    function renderPickCourseList(){
+      const key=(document.getElementById('pickCourseSearch')?.value||'').trim().toLowerCase();
+      const list=library.filter(c=>{
+        if(pickLockCourse && pickCourseId) return c.course_id===pickCourseId;
+        if(!key) return true;
+        return c.course_name.toLowerCase().includes(key) || (c.course_type||'').toLowerCase().includes(key);
+      });
+      document.getElementById('pickCourseList').innerHTML = list.map(c=>`
+        <div class="pick-course-item ${pickCourseId===c.course_id?'active':''}" onclick="selectPickCourse(${c.course_id})">
+          ${escapeHtml(c.course_name)}
+          <div style="margin-top:4px;font-size:11px;color:#8a9bb0;">${escapeHtml(c.course_type)} · ${c.hours} 学时</div>
+        </div>`).join('') || '<div class="empty-tip">未找到匹配课程</div>';
+    }
+
+    function selectPickCourse(cid){
+      if(pickLockCourse && pickCourseId && cid!==pickCourseId) return;
+      pickCourseId=cid;
+      const existing=findCourse(cid);
+      if(existing) pickCheckedPoints=new Set(coursePointIds(existing));
+      renderPickCourseList(); renderPickPoints();
+    }
+
+    function renderPickPoints(){
+      if(pickMode==='chapter') return;
+      const course=libraryById(pickCourseId);
+      const panel=document.getElementById('pickPointPanel');
+      if(!course){ panel.innerHTML='<div class="empty-tip">请先选择左侧课程</div>'; return; }
+      const allIds=coursePointIds(course);
+      const selectedCount=allIds.filter(id=>pickCheckedPoints.has(id)).length;
+      const allSelected=allIds.length>0 && allIds.every(id=>pickCheckedPoints.has(id));
+      const existing=findCourse(pickCourseId);
+      const existingIds=existing?new Set(coursePointIds(existing)):new Set();
+      panel.innerHTML=`
+        <div class="pick-point-toolbar">
+          <div class="hint">已选 ${selectedCount}/${allIds.length} 个知识点</div>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="togglePickAllPoints()">${allSelected?'取消全选':'全选'}</button>
+        </div>
+        ${(course.chapters||[]).map(ch=>`
+          <div class="pick-chapter">
+            <div class="pick-chapter-title"><span>${escapeHtml(ch.chapter_name)}</span>
+              <button class="btn btn-sm btn-ghost" type="button" onclick="togglePickChapter(${ch.chapter_id})">${(ch.points||[]).every(p=>pickCheckedPoints.has(p.id))&&(ch.points||[]).length?'取消全选':'全选'}</button>
+            </div>
+            ${(ch.points||[]).map(p=>`
+              <label class="pick-point-item">
+                <input type="checkbox" ${pickCheckedPoints.has(p.id)?'checked':''} onchange="togglePickPoint(${p.id},this.checked)">
+                <div><div class="pick-point-name">${escapeHtml(p.name)}${existingIds.has(p.id)?' <span style="color:#16a34a;">（已加入）</span>':''}</div><div class="pick-point-desc">${escapeHtml(p.desc||'')}</div></div>
+              </label>`).join('') || '<div class="empty-tip">该章节暂无知识点</div>'}
+          </div>`).join('') || '<div class="empty-tip">该课程暂无章节</div>'}`;
+    }
+
+    function togglePickPoint(pid, checked){
+      if(checked) pickCheckedPoints.add(pid); else pickCheckedPoints.delete(pid);
+      if(pickMode==='chapter'){
+        const catalogCourse=libraryById(pickCourseId);
+        const catalogChapter=catalogCourse&&(catalogCourse.chapters||[]).find(ch=>ch.chapter_id===pickChapterId);
+        const planChapter=findChapter(pickCourseId,pickChapterId);
+        if(!catalogChapter||!planChapter) return;
+        const existingIds=new Set((planChapter.points||[]).map(p=>p.id));
+        const available=(catalogChapter.points||[]).filter(p=>!existingIds.has(p.id));
+        renderChapterPickPoints(catalogChapter, available);
+      } else renderPickPoints();
+    }
+    function togglePickChapter(chid){
+      const course=libraryById(pickCourseId); if(!course) return;
+      const chapter=(course.chapters||[]).find(ch=>ch.chapter_id===chid); if(!chapter) return;
+      const ids=(chapter.points||[]).map(p=>p.id);
+      const allOn=ids.length>0 && ids.every(id=>pickCheckedPoints.has(id));
+      ids.forEach(id=>{ if(allOn) pickCheckedPoints.delete(id); else pickCheckedPoints.add(id); });
+      renderPickPoints();
+    }
+    function togglePickAllPoints(){
+      const course=libraryById(pickCourseId); if(!course) return;
+      const ids=coursePointIds(course);
+      const allOn=ids.length>0 && ids.every(id=>pickCheckedPoints.has(id));
+      ids.forEach(id=>{ if(allOn) pickCheckedPoints.delete(id); else pickCheckedPoints.add(id); });
+      renderPickPoints();
+    }
+
+    function confirmPickCourse(){
+      if(pickMode==='chapter') return confirmPickChapterPoints();
+      if(!pickCourseId) return showToast('请选择课程');
+      if(!pickCheckedPoints.size) return showToast('请至少选择一个知识点');
+      const cloned=cloneCourse(pickCourseId,'self'); if(!cloned) return;
+      cloned.chapters=(cloned.chapters||[]).map(ch=>({...ch, points:(ch.points||[]).filter(p=>pickCheckedPoints.has(p.id))})).filter(ch=>(ch.points||[]).length);
+      const list=planCourses.slice();
+      const existing=list.find(c=>c.course_id===cloned.course_id);
+      if(existing){
+        const pointMap=new Set(coursePointIds(existing));
+        cloned.chapters.forEach(ch=>{
+          let target=(existing.chapters||[]).find(x=>x.chapter_id===ch.chapter_id);
+          if(!target){ existing.chapters=existing.chapters||[]; existing.chapters.push(JSON.parse(JSON.stringify(ch))); }
+          else { (ch.points||[]).forEach(p=>{ if(!pointMap.has(p.id)){ target.points=target.points||[]; target.points.push(JSON.parse(JSON.stringify(p))); } }); }
+        });
+        if(existing.source==='job') existing.source='self';
+        coursePointIds(cloned).forEach(id=>previewChecked.add(id));
+        openCourseIds.add(existing.course_id);
+      }else{
+        list.push(cloned);
+        coursePointIds(cloned).forEach(id=>previewChecked.add(id));
+        openCourseIds.add(cloned.course_id);
+      }
+      planCourses=list; closePickModal(); renderPreview(); showToast('已添加课程');
+    }
+
+    function confirmPickChapterPoints(){
+      if(!pickCourseId||!pickChapterId) return showToast('章节信息缺失');
+      if(!pickCheckedPoints.size) return showToast('请至少选择一个知识点');
+      const catalogCourse=libraryById(pickCourseId);
+      const catalogChapter=catalogCourse&&(catalogCourse.chapters||[]).find(ch=>ch.chapter_id===pickChapterId);
+      const planChapter=findChapter(pickCourseId,pickChapterId);
+      if(!catalogChapter||!planChapter) return showToast('未找到章节');
+      const existingIds=new Set((planChapter.points||[]).map(p=>p.id));
+      let added=0;
+      (catalogChapter.points||[]).forEach(p=>{
+        if(pickCheckedPoints.has(p.id) && !existingIds.has(p.id)){ planChapter.points=planChapter.points||[]; planChapter.points.push(JSON.parse(JSON.stringify(p))); previewChecked.add(p.id); added++; }
+      });
+      if(!added) return showToast('没有可添加的知识点');
+      openCourseIds.add(pickCourseId);
+      closePickModal(); renderPreview(); showToast(`已添加 ${added} 个知识点`);
+    }
+
+    // ===== 提交（合并成一条多课程计划）=====
+    async function confirmAddPlans(){
+      const list=planCourses;
+      if(!list.length) return showToast('请先选择或生成课程计划');
+      const selections=[];
+      list.forEach(c=>{
+        const node_ids=coursePointIds(c).filter(id=>previewChecked.has(id));
+        if(node_ids.length) selections.push({course_id:c.course_id, node_ids});
+      });
+      if(!selections.length) return showToast('请至少勾选一个知识点');
+      const srcs=new Set(list.map(c=>c.source));
+      let plan_type='self', category='自主学习';
+      if(srcs.size===1 && srcs.has('ai')){ plan_type='ai'; category='AI推荐'; }
+      else if(srcs.size===1 && srcs.has('job')){ category='岗位原定'; }
+      try{
+        const r=await fetch('/api/learning-plans/from-courses',{method:'POST',headers:jsonHeaders(),body:JSON.stringify({plan_type, category, selections})});
+        const d=await r.json();
+        if(d.ok){
+          const total=selections.reduce((s,x)=>s+x.node_ids.length,0);
+          showToast(`已加入 ${selections.length} 门课程 / ${total} 个知识点`);
+          setTimeout(()=>{ location.href='学习计划.html'; }, 650);
+        }else showToast(d.error||'加入失败');
+      }catch(e){ showToast('网络错误'); }
+    }
+
+    document.addEventListener('keydown',(e)=>{
+      if(e.key==='Escape'){
+        if(document.getElementById('testModal').classList.contains('show')) closeTestModal();
+        else if(document.getElementById('pathModal').classList.contains('show')) closePathModal();
+        else if(document.getElementById('pickModal').classList.contains('show')) closePickModal();
+      }
+    });
+
+    (async function init(){
+      await loadLibrary();
+      renderCourseOptions();
+      await loadJobs();
+    })();
+  </script>
+</body>
+</html>

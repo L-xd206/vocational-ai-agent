@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计划调整</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { --blue:#3B82F6; --ink:#172033; --muted:#7E8DA8; --line:#E3EBF5; --white:#FFFFFF; --shadow:0 14px 34px rgba(29,45,74,.08); }
+    body { height:100vh; overflow:hidden; display:flex; flex-direction:column; padding:12px 18px 10px; background:radial-gradient(circle at 8% 8%,rgba(191,219,254,.5),transparent 28%),radial-gradient(circle at 92% 12%,rgba(165,180,252,.45),transparent 26%),#F7FAFC; color:var(--ink); font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; }
+    .btn { height:34px; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 13px; border:1px solid #DDE8F4; border-radius:10px; background:var(--white); color:#43516A; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; transition:.16s ease; }
+    .btn:hover { border-color:#B8C8DF; }
+    .btn-primary { border-color:#3B82F6; background:linear-gradient(135deg,#60A5FA,#2563EB); color:#fff; }
+    .btn-danger { border-color:#ef4444; color:#dc2626; background:#fff; }
+    .btn-sm { height:26px; padding:0 9px; font-size:12px; border-radius:8px; }
+
+    .head { display:flex; align-items:center; gap:12px; padding:12px 16px; margin-bottom:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.92); box-shadow:0 10px 26px rgba(29,45,74,.06); }
+    .plan-name { font-size:17px; font-weight:800; color:#1F2D44; }
+    .hint { font-size:12px; color:var(--muted); }
+
+    .cols { flex:1; min-height:0; display:grid; grid-template-columns:300px 1fr 340px; gap:12px; }
+    .col { display:flex; flex-direction:column; min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:16px; background:var(--white); box-shadow:var(--shadow); }
+    .col-head { padding:11px 14px; background:linear-gradient(180deg,#F8FBFF,#F2F6FB); font-size:13px; font-weight:800; color:#334155; border-bottom:1px solid #E8EEF7; display:flex; align-items:center; gap:8px; }
+    .col-body { flex:1; overflow-y:auto; padding:12px; }
+
+    .section-title { font-size:12px; font-weight:800; color:var(--muted); margin:10px 0 6px; }
+    .item-card { border:1px solid #E8EEF7; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:#FBFDFF; }
+    .item-title-row { display:flex; align-items:center; gap:6px; }
+    .item-title { font-size:13px; font-weight:800; color:#1F2D44; flex:1; min-width:0; }
+    .item-tag { flex-shrink:0; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:800; }
+    .tag-weak { background:#FEF3C7; color:#D97706; }
+    .tag-new { background:#E0F2FE; color:#0284C7; }
+    .item-desc { font-size:12px; color:var(--muted); margin-top:5px; line-height:1.5; }
+    .item-actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+
+    .course-block { border:1px solid var(--line); border-radius:11px; margin-bottom:10px; overflow:hidden; }
+    .course-head { display:flex; align-items:center; gap:6px; padding:9px 11px; background:#F8FBFF; cursor:pointer; }
+    .course-head .cname { font-size:14px; font-weight:800; color:#1F2D44; flex:1; min-width:0; }
+    .course-head .cmeta { font-size:11px; color:var(--muted); font-weight:700; }
+    .course-head .ops { display:flex; gap:4px; }
+    .cbody { padding:6px 10px; }
+    .chap-row { margin:4px 0; }
+    .chap-head { font-size:12px; font-weight:800; color:#475569; margin:7px 0 4px; display:flex; align-items:center; gap:6px; }
+    .chip { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border:1px solid #E3EBF5; border-radius:8px; font-size:12px; color:#43516A; margin:2px; background:#fff; }
+    .chip.in { background:#F0FDF4; border-color:#BBF7D0; color:#15803d; }
+    .chip .x { cursor:pointer; color:#ef4444; font-weight:800; }
+    .chip .x:hover { color:#dc2626; }
+
+    .lib-course { border:1px solid #E8EEF7; border-radius:10px; margin-bottom:8px; overflow:hidden; }
+    .lib-course-head { display:flex; align-items:center; gap:6px; padding:8px 10px; cursor:pointer; background:#fff; }
+    .lib-course-head:hover { background:#F8FBFF; }
+    .lib-cname { font-size:13px; font-weight:800; flex:1; color:#1F2D44; }
+    .lib-cbody { border-top:1px dashed #E3EBF5; padding:6px 8px; display:none; }
+    .lib-cbody.open { display:block; }
+    .lib-pt { display:flex; align-items:center; gap:8px; padding:5px 6px; font-size:12px; color:#43516A; border-radius:6px; }
+    .lib-pt input { accent-color:#3B82F6; }
+    .lib-pt.done { color:#9aa6b8; text-decoration:line-through; }
+    .empty-tip { padding:20px 0; text-align:center; color:var(--muted); font-size:13px; }
+    .weak-link { font-size:12px; color:#3B82F6; font-weight:700; cursor:pointer; }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <section class="head">
+    <button class="btn" onclick="location.href='学习计划.html'">‹ 返回学习计划</button>
+    <span class="plan-name" id="planName">计划调整</span>
+    <span class="hint" id="planHint"></span>
+    <button class="btn" style="margin-left:auto;" onclick="location.href='计划详情.html?id='+planId">去学习 ›</button>
+  </section>
+
+  <div class="cols">
+    <!-- 左：建议 -->
+    <section class="col">
+      <div class="col-head">AI 薄弱项建议</div>
+      <div class="col-body" id="weakCol"><div class="empty-tip">加载中...</div></div>
+    </section>
+    <!-- 中：当前计划内容 -->
+    <section class="col">
+      <div class="col-head">当前计划课程</div>
+      <div class="col-body" id="curCol"><div class="empty-tip">加载中...</div></div>
+    </section>
+    <!-- 右：课程库 -->
+    <section class="col">
+      <div class="col-head" style="justify-content:space-between;">
+        <span>课程库 · 添加课程</span>
+        <button class="btn btn-sm btn-primary" onclick="addSelected()">加入选中知识点</button>
+      </div>
+      <div class="col-body" id="libCol"><div class="empty-tip">加载中...</div></div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" style="display:none;position:fixed;right:22px;top:22px;z-index:160;padding:12px 18px;border-radius:12px;background:#172033;color:#fff;font-size:13px;font-weight:700;"></div>
+
+  <script>
+    function getCookie(n){if(document.cookie){for(const c of document.cookie.split(';')){const t=c.trim();if(t.startsWith(n+'='))return decodeURIComponent(t.substring(n.length+1))}}return null}
+    const csrftoken = getCookie('csrftoken');
+    const jsonHeaders = () => { const h={'Content-Type':'application/json'}; if(csrftoken) h['X-CSRFToken']=csrftoken; return h; };
+    const planId = new URLSearchParams(location.search).get('id');
+    let data = null;
+    const checked = new Set();
+
+    async function load() {
+      try {
+        const r = await fetch(`/api/learning-plans/${planId}/adjust`); const d = await r.json();
+        if (!d.ok) { toast(d.error || '加载失败'); return; }
+        data = d;
+        document.getElementById('planName').textContent = d.plan.name;
+        const type = { semester:'学期计划', self:'自主学习', ai:'AI推荐' }[d.plan.plan_type] || '';
+        document.getElementById('planHint').textContent = type;
+        renderWeak();
+        renderCurrent();
+        renderLib();
+      } catch(e) { toast('网络错误'); }
+    }
+
+    function renderWeak() {
+      const box = document.getElementById('weakCol');
+      if (!data.weak_points.length) { box.innerHTML = '<div class="empty-tip">暂无薄弱项建议。完成随堂练习/测验后 AI 会自动分析。</div>'; return; }
+      box.innerHTML = '<div class="section-title">低于 70% 的知识点</div>' + data.weak_points.map(w => `
+        <div class="item-card">
+          <div class="item-title-row"><span class="item-title">${escapeHtml(w.node_name)}</span><span class="item-tag tag-weak">${w.mastery}%</span></div>
+          <div class="item-desc">${escapeHtml(w.suggestion || '')}</div>
+        </div>`).join('');
+    }
+
+    function renderCurrent() {
+      const box = document.getElementById('curCol');
+      if (!data.plan_courses.length) { box.innerHTML = '<div class="empty-tip">计划还没有课程，请在右侧从课程库添加。</div>'; return; }
+      box.innerHTML = data.plan_courses.map((pc, idx) => {
+        const totalPts = pc.chapters.reduce((s,c)=>s+c.points.length,0);
+        const chaptersHtml = pc.chapters.map(ch => {
+          const pts = ch.points.map(p => `<span class="chip ${p.completed?'in':''}">${escapeHtml(p.name)}<span class="x" onclick="removePoint(${p.id})">×</span></span>`).join('');
+          return `<div class="chap-row"><div class="chap-head">${escapeHtml(ch.chapter_name)}<span style="margin-left:auto;"><button class="btn btn-sm" onclick="removeChapter(${pc.course_id},${ch.chapter_id})">删整章</button></span></div><div>${pts || '<span style="font-size:12px;color:var(--muted)">暂无已选点</span>'}</div></div>`;
+        }).join('');
+        return `<div class="course-block">
+          <div class="course-head">
+            <span class="cname">${escapeHtml(pc.course_name)}</span>
+            <span class="cmeta">${totalPts} 知识点</span>
+            <span class="ops">
+              <button class="btn btn-sm" ${idx===0?'disabled':''} onclick="moveCourse(${pc.course_id},'up')">↑</button>
+              <button class="btn btn-sm" ${idx===data.plan_courses.length-1?'disabled':''} onclick="moveCourse(${pc.course_id},'down')">↓</button>
+              <button class="btn btn-sm btn-danger" onclick="removeCourse(${pc.course_id})">删课</button>
+            </span>
+          </div>
+          <div class="cbody">${chaptersHtml}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderLib() {
+      const box = document.getElementById('libCol');
+      checked.clear();
+      box.innerHTML = data.library.map(course => {
+        const chaptersHtml = course.chapters.map(ch => `
+          <div class="chap-row" style="margin-left:4px;">
+            <div class="chap-head">${escapeHtml(ch.chapter_name)}</div>
+            ${ch.points.map(p => `<label class="lib-pt ${p.in_plan?'done':''}"><input type="checkbox" ${p.in_plan?'disabled':''} value="${p.id}" onchange="toggleCheck(this)"><span>${escapeHtml(p.name)}</span>${p.in_plan?'（已加入）':''}</label>`).join('')}
+          </div>`).join('');
+        return `<div class="lib-course">
+          <div class="lib-course-head" onclick="this.nextElementSibling.classList.toggle('open')">
+            <span class="lib-cname">${escapeHtml(course.course_name)}</span>
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();addCourse(${course.course_id})">整课加入</button>
+          </div>
+          <div class="lib-cbody">${chaptersHtml || '<div style="font-size:12px;color:var(--muted);padding:4px;">暂无知识点</div>'}</div>
+        </div>`;
+      }).join('') || '<div class="empty-tip">暂无可用课程</div>';
+    }
+
+    function toggleCheck(el) { el.checked ? checked.add(Number(el.value)) : checked.delete(Number(el.value)); }
+
+    async function post(body) {
+      try {
+        const r = await fetch(`/api/learning-plans/${planId}/adjust`, { method:'POST', headers:jsonHeaders(), body:JSON.stringify(body) });
+        const d = await r.json();
+        if (d.ok) { load(); return true; }
+        toast(d.error || '操作失败'); return false;
+      } catch(e) { toast('网络错误'); return false; }
+    }
+
+    function addCourse(courseId) { post({ action:'add_course', course_id: courseId }); }
+    function addPoint(nodeId) { post({ action:'add_point', node_id: nodeId }); }
+    async function addSelected() {
+      if (!checked.size) { toast('请先在右侧勾选要加入的知识点'); return; }
+      for (const nid of checked) { await post({ action:'add_point', node_id: nid }); }
+      toast('已加入选中知识点');
+    }
+    function removeCourse(courseId) { post({ action:'remove_course', course_id: courseId }); }
+    function removePoint(nodeId) { post({ action:'remove_point', node_id: nodeId }); }
+    async function removeChapter(courseId, chapterId) {
+      // 删除该章在计划内的全部点
+      const pc = data.plan_courses.find(c => c.course_id === courseId);
+      const ch = pc && pc.chapters.find(x => x.chapter_id === chapterId);
+      if (!ch) return;
+      for (const p of ch.points) await post({ action:'remove_point', node_id: p.id });
+      toast('已删除该章计划内知识点');
+    }
+    function moveCourse(courseId, direction) { post({ action:'move_course', course_id: courseId, direction }); }
+
+    function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2200); }
+    function escapeHtml(s) { const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+    if (!planId) { toast('缺少计划参数'); } else load();
+  </script>
+</body>
+</html>
