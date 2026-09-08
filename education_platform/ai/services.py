@@ -25,3 +25,21 @@ def select_course_textbook(ability_snapshot: dict, textbook_index: dict) -> dict
     """从学院教材知识库中自动选择最匹配教材。"""
     from ai.course_generation import select_textbook_for_ability
     return select_textbook_for_ability(ability_snapshot, textbook_index)
+
+
+def ai_available() -> bool:
+    """是否已配置 AI 密钥（决定真 AI 还是规则降级）。"""
+    from ai.client import DEEPSEEK_API_KEY
+    return bool(DEEPSEEK_API_KEY)
+
+
+def analyze_learning_weakness(stats: list) -> dict:
+    """AI 分析学生测评薄弱知识点。"""
+    from ai.learning_plan import analyze_weakness
+    return analyze_weakness(stats)
+
+
+def match_courses_from_chat(chat_text: str, catalog: list) -> dict:
+    """AI 根据对话内容从课程库匹配课程。"""
+    from ai.learning_plan import match_courses_from_chat
+    return match_courses_from_chat(chat_text, catalog)

@@ -566,6 +566,18 @@
         .filter(group => group.items && group.items.length > 0);
     }
 
+    function findFirstHref(menuData) {
+      // 取第一个可见页面的 href（用于默认加载用户有权限的第一个页面）
+      for (const group of menuData) {
+        for (const item of (group.items || [])) {
+          for (const child of (item.children || [])) {
+            if (child.href) return child.href;
+          }
+        }
+      }
+      return null;
+    }
+
     document.getElementById('sidebar').setMenuData(MENU_DATA);
 
     // 监听菜单选择，切换 iframe 页面
@@ -594,7 +606,14 @@
         if (u.role) sidebar.setAttribute('user-role', u.role.name);
         if (u.avatar) sidebar.setAttribute('user-avatar', u.avatar);
         // 按权限隐藏菜单
-        sidebar.setMenuData(filterMenuByPermissions(MENU_DATA, u.permissions));
+        const filtered = filterMenuByPermissions(MENU_DATA, u.permissions);
+        sidebar.setMenuData(filtered);
+        // 默认加载第一个有权限的页面（而不是固定的能力图谱库）
+        const firstHref = findFirstHref(filtered);
+        const frame = document.getElementById('contentFrame');
+        if (firstHref && frame.getAttribute('src') !== firstHref) {
+          frame.src = firstHref;
+        }
         refreshMsgBadge();
       }
     });
@@ -634,8 +653,8 @@
       if (e.data && e.data.type === 'msg-badge-refresh') refreshMsgBadge();
     });
 
-    // 默认加载能力图谱库页面
-    document.getElementById('contentFrame').src = '能力图谱库.html';
+    // 默认加载页由 fetch /api/auth/me 拿到权限后动态决定（用户第一个有权限的页面），
+    // 见上方 findFirstHref 逻辑，避免无权限用户一进来就看到能力图谱库。
 
     // Toast 提示
     function showToast(msg) {
