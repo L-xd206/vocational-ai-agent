@@ -1,10 +1,13 @@
 import json
+from unittest.mock import patch
 
 from django.test import TestCase
 
 from ai.capability_generation import build_prompt
 
 from apps.industry.models import Chain, Job
+from apps.collection.models import CrawlSource, CrawlTask
+from apps.collection.services import save_crawl_result, valid_job_requirements
 from apps.organizations.models import Organization
 
 from .models import CapabilityNode, parse_abilities_to_tree
@@ -129,3 +132,46 @@ class CapabilityNodeServicesTests(TestCase):
         ability.refresh_from_db()
         self.assertEqual(ability.organization, self.college)
         self.assertEqual(response.json()["college"], self.college.name)
+
+    def test_formal_tree_uses_accumulated_data_when_latest_crawl_has_no_new_items(self):
+        source = CrawlSource.objects.create(
+            name="累计数据测试来源",
+            code="accumulated_test",
+            base_url="https://example.com",
+        )
+        first_task = CrawlTask.objects.create(
+            job=self.job,
+            source=source,
+            status="completed",
+        )
+        for index in range(10):
+            save_crawl_result(first_task, {
+                "title": self.job.name,
+                "company": f"测试企业{index}",
+                "requirements": f"负责工业机器人第{index}类设备的安装调试、运行检查与维护保养工作。",
+                "source_url": f"https://example.com/jobs/{index}",
+            })
+        CrawlTask.objects.create(
+            job=self.job,
+            source=source,
+            status="completed",
+            total_results=10,
+            new_results=0,
+        )
+
+        self.assertEqual(len(valid_job_requirements(self.job)), 10)
+
+        tree_response = self.client.get(f"/api/ability/{self.job.id}/tree")
+        self.assertEqual(tree_response.status_code, 200)
+        self.assertEqual(tree_response.json()["data_count"], 10)
+        self.assertEqual(tree_response.json()["data_status"], "ready")
+
+        with patch("apps.capabilities.views.threading.Thread") as thread_class:
+            generate_response = self.client.post(
+                "/api/ability/generate",
+                data=json.dumps({"job_id": self.job.id}),
+                content_type="application/json",
+            )
+        self.assertEqual(generate_response.status_code, 200)
+        self.assertEqual(generate_response.json()["status"], "processing")
+        thread_class.return_value.start.assert_called_once_with()

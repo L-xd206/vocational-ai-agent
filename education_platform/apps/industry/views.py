@@ -3,6 +3,7 @@ import json
 import os
 from django.shortcuts import render
 from django.http import JsonResponse
+from django.db.models import Prefetch
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
@@ -20,8 +21,13 @@ def page_chain_list(request):
 
 @csrf_exempt
 def api_chain_list(request):
-    """获取所有产业链"""
-    chains = Chain.objects.prefetch_related("jobs").all()
+    """获取当前可用于业务流程的产业链和岗位。"""
+    active_jobs = Job.objects.filter(is_enabled=True)
+    chains = (
+        Chain.objects.filter(is_enabled=True)
+        .prefetch_related(Prefetch("jobs", queryset=active_jobs))
+        .order_by("id")
+    )
     return JsonResponse({
         "chains": [{
             "id": c.id, "name": c.name, "description": c.description,
@@ -34,9 +40,13 @@ def api_chain_list(request):
 
 @csrf_exempt
 def api_chain_detail(request, chain_id):
-    """获取产业链详情（含岗位列表）"""
+    """获取已启用产业链详情（仅含可用岗位）。"""
     try:
-        chain = Chain.objects.prefetch_related("jobs").get(id=chain_id)
+        chain = (
+            Chain.objects.filter(is_enabled=True)
+            .prefetch_related(Prefetch("jobs", queryset=Job.objects.filter(is_enabled=True)))
+            .get(id=chain_id)
+        )
     except Chain.DoesNotExist:
         return JsonResponse({"error": "产业链不存在"}, status=404)
 

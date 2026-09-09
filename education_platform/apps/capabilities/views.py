@@ -7,7 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from apps.industry.models import Job, Chain
 from apps.collection.models import CrawlTask
-from apps.collection.services import MIN_VALID_LISTINGS, data_quality, valid_requirements
+from apps.collection.services import MIN_VALID_LISTINGS, data_quality, valid_job_requirements
 from apps.organizations.models import Organization
 from .models import AbilityMap, CapabilityNode, parse_abilities_to_tree
 from .services import (
@@ -25,12 +25,12 @@ def _run_ability_gen(job_id: int):
     """后台生成能力图谱"""
     try:
         job = Job.objects.get(id=job_id)
-        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
-        if not task:
+        has_completed_crawl = CrawlTask.objects.filter(job=job, status="completed").exists()
+        if not has_completed_crawl:
             raise RuntimeError("请先完成招聘数据采集")
 
-        # 先筛选有效招聘要求，避免让 AI 基于过少数据生成图谱
-        reqs = valid_requirements(task)
+        # 正式树使用岗位历次已完成采集的累计有效数据；增量分析仍只看单批新增。
+        reqs = valid_job_requirements(job)
         if len(reqs) < MIN_VALID_LISTINGS:
             quality, message = data_quality(len(reqs))
             raise RuntimeError(message)
@@ -81,10 +81,10 @@ def api_ability_generate(request):
         job = Job.objects.get(id=job_id)
 
         # 先检查是否已有爬取数据，并筛选有效招聘要求
-        task = CrawlTask.objects.filter(job=job, status="completed").order_by("-created_at").first()
-        if not task:
+        has_completed_crawl = CrawlTask.objects.filter(job=job, status="completed").exists()
+        if not has_completed_crawl:
             return JsonResponse({"error": "请先爬取招聘数据"}, status=400)
-        valid_count = len(valid_requirements(task))
+        valid_count = len(valid_job_requirements(job))
         quality, message = data_quality(valid_count)
         if valid_count < MIN_VALID_LISTINGS:
             return JsonResponse({
@@ -123,7 +123,8 @@ def api_ability_tree(request, job_id):
         from apps.collection.models import CrawlTask
         crawl_task = CrawlTask.objects.filter(job_id=job_id, status="completed").order_by("-created_at").first()
         crawl_status = "completed" if crawl_task else "not_started"
-        data_count = len(valid_requirements(crawl_task)) if crawl_task else 0
+        job = Job.objects.get(id=job_id)
+        data_count = len(valid_job_requirements(job)) if crawl_task else 0
         quality_status, data_message = data_quality(data_count)
 
         has_nodes = CapabilityNode.objects.filter(job_id=job_id).exists()
@@ -141,7 +142,6 @@ def api_ability_tree(request, job_id):
                                  "data_count": data_count, "data_status": quality_status, "data_message": data_message,
                                  "required_count": MIN_VALID_LISTINGS})
 
-        job = Job.objects.get(id=job_id)
         tree = serialize_official_tree(job)
         total_abilities = sum(1 for item in tree)
         total_skills = sum(

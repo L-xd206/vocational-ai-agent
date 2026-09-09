@@ -72,7 +72,7 @@ def api_crawl_sources(request):
         return JsonResponse({
             "sources": [
                 serialize_crawl_source(source)
-                for source in CrawlSource.objects.order_by("id")
+                for source in CrawlSource.objects.filter(is_enabled=True).order_by("id")
             ],
         })
     try:
@@ -169,7 +169,11 @@ def api_crawl_status(request, task_id):
 @login_required
 @require_http_methods(["GET"])
 def api_crawl_tasks(request):
-    queryset = CrawlTask.objects.select_related("job", "source").order_by("-created_at")
+    queryset = (
+        CrawlTask.objects.select_related("job", "source")
+        .filter(job__is_enabled=True, job__chain__is_enabled=True)
+        .order_by("-created_at")
+    )
     if request.GET.get("job_id"):
         queryset = queryset.filter(job_id=request.GET["job_id"])
     if request.GET.get("status"):
@@ -371,6 +375,8 @@ def api_rejected_analysis_tree(request):
     """按岗位合并未采纳历史，并为拒纳节点保留完整祖先路径。"""
     batches = AnalysisBatch.objects.filter(
         nodes__decision_status="rejected",
+        job__is_enabled=True,
+        job__chain__is_enabled=True,
     ).select_related("job__chain", "crawl_task").distinct().order_by("-created_at")
     if request.GET.get("job_id"):
         batches = batches.filter(job_id=request.GET["job_id"])

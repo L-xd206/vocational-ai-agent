@@ -252,6 +252,38 @@ def valid_requirements(task, *, new_only=False):
     ]
 
 
+def valid_job_requirement_records(job):
+    """汇总岗位历次已完成采集中的有效任职要求，供正式树生成使用。"""
+    candidates = list(
+        JobListing.objects.filter(job=job, task__status="completed")
+        .select_related("crawl_source")
+        .order_by("first_seen_at", "id")
+    )
+    accepted = []
+    comparison_pool = []
+    for listing in candidates:
+        requirement = str(listing.requirements or "").strip()
+        if len(requirement) <= 10:
+            continue
+        requirement_key = normalise_requirement_text(requirement)
+        if any(
+            _normalised_requirements_similar(requirement_key, old_key)
+            for old_key in comparison_pool
+        ):
+            continue
+        accepted.append(listing)
+        comparison_pool.append(requirement_key)
+    return accepted
+
+
+def valid_job_requirements(job):
+    """返回岗位累计的有效且互不重复的任职要求。"""
+    return [
+        listing.requirements.strip()
+        for listing in valid_job_requirement_records(job)
+    ]
+
+
 def analysis_requirement_records(task):
     """复现AI输入的过滤与编号顺序，用于把“招聘要求[n]”追溯到原记录。"""
     seen = set()
