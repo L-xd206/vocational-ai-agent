@@ -12,6 +12,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -23,93 +24,139 @@ from apps.collection.models import CrawlSource, CrawlTask, JobListing
 from apps.collection.services import create_analysis_batch
 from apps.curriculum.models import CourseTree, CourseTreeNode
 from apps.industry.models import Chain, Job
-from apps.learning.models import LearningPlan, LearningRecord
+from apps.learning.models import (
+    LearningPlan, LearningProgress, LearningRecord, PlanCourse, PlanPoint,
+)
 from apps.organizations.models import Organization, Student
 from apps.resources.models import Textbook, TextbookNode
 from apps.teaching.models import CourseQuestion
 
 
-DEMO_TREE = [
+CNC_DEMO_TREE = [
     {
-        "name": "作业安全与现场准备",
+        "name": "加工准备与工程识图",
         "college": "智能制造学院",
         "units": [
             {
-                "name": "安全装置与防护检查",
+                "name": "零件图纸阅读与分析",
                 "children": [
-                    {"name": "确认急停、安全门和安全光栅功能有效"},
-                    {"name": "检查个人防护用品与作业区域状态"},
+                    {"name": "识读零件图标题栏、尺寸标注与技术要求"},
+                    {"name": "开展零件结构工艺性分析"},
                 ],
             },
             {
-                "name": "工作站上电准备",
+                "name": "加工工艺方案制定",
                 "children": [
-                    {"name": "核对工装、工件和末端执行器状态"},
-                    {"name": "完成控制柜上电前检查与风险确认"},
+                    {"name": "确认毛坯材料与余量"},
+                    {"name": "划分工序并制定加工路线"},
+                    {"name": "选择刀具并制定切削参数"},
+                ],
+            },
+            {
+                "name": "夹具选择与装夹方案设计",
+                "children": [
+                    {"name": "选择适配的夹具与定位方式"},
+                    {"name": "完成工件装夹、找正与夹紧检查"},
                 ],
             },
         ],
     },
     {
-        "name": "工业机器人系统安装与调试",
+        "name": "刀具准备与对刀操作",
         "college": "智能制造学院",
         "units": [
             {
-                "name": "机械与电气连接",
+                "name": "刀具安装与刀补设置",
                 "children": [
-                    {"name": "识读机器人工作站电气原理图"},
-                    {"name": "完成末端执行器和传感器接线检查"},
+                    {"name": "完成刀具与刀柄装配"},
+                    {"name": "完成刀具安装、测量与刀具补偿设置"},
                 ],
             },
             {
-                "name": "示教与程序调试",
+                "name": "工件坐标系建立与对刀",
                 "children": [
-                    {"name": "完成坐标系标定和示教点设置"},
-                    {"name": "调试运动轨迹并验证节拍要求"},
+                    {"name": "完成X、Y方向对刀"},
+                    {"name": "完成Z向对刀与刀长补偿设置"},
+                    {"name": "验证对刀结果与坐标系安全性"},
                 ],
             },
         ],
     },
     {
-        "name": "自动化产线运行与故障诊断",
+        "name": "数控编程与程序校验",
         "college": "智能制造学院",
         "units": [
             {
-                "name": "产线运行监控",
+                "name": "手工程序编制",
                 "children": [
-                    {"name": "监控机器人、PLC和输送线运行状态"},
-                    {"name": "识别产线节拍异常和质量报警信息"},
+                    {"name": "编写基本G代码程序"},
+                    {"name": "应用M代码、子程序与循环指令"},
                 ],
             },
             {
-                "name": "常见故障诊断",
+                "name": "程序输入与校验",
                 "children": [
-                    {"name": "依据报警代码定位安全回路故障"},
-                    {"name": "完成I/O信号与通信异常排查"},
+                    {"name": "完成数控程序输入与编辑"},
+                    {"name": "使用单段运行和空运行校验程序"},
+                ],
+            },
+            {
+                "name": "CAM自动编程与验证",
+                "children": [
+                    {"name": "使用CAM软件生成刀路与NC程序"},
+                    {"name": "通过仿真校验识别碰撞、过切与参数风险"},
                 ],
             },
         ],
     },
     {
-        "name": "预防性维护与运行数据管理",
+        "name": "数控机床操作与零件加工",
         "college": "智能制造学院",
         "units": [
             {
-                "name": "设备点检与维护",
+                "name": "机床启动与基本操作",
                 "children": [
-                    {"name": "执行机器人本体、线缆和控制柜日常点检"},
-                    {"name": "完成程序备份、电池检查和维护记录"},
+                    {"name": "完成开机前安全检查"},
+                    {"name": "使用操作面板完成机床基本控制"},
                 ],
             },
             {
-                "name": "运行数据记录与交接",
+                "name": "数控车削加工",
                 "children": [
-                    {"name": "记录产量、停机原因和故障处理过程"},
-                    {"name": "完成设备状态和程序版本交接确认"},
+                    {"name": "完成外圆与端面车削"},
+                    {"name": "完成槽、螺纹与孔类车削"},
+                ],
+            },
+            {
+                "name": "加工中心铣削加工",
+                "children": [
+                    {"name": "完成平面与轮廓铣削"},
+                    {"name": "完成型腔与复杂曲面加工"},
+                    {"name": "完成孔系加工"},
                 ],
             },
         ],
     },
+    {"name": "加工过程监控与质量控制", "college": "智能制造学院", "units": [
+        {"name": "加工状态过程监控", "children": [{"name": "监控切削声音、振动与刀具状态"}, {"name": "检查并调整冷却液与润滑状态"}]},
+        {"name": "加工质量巡检", "children": [{"name": "依据工艺要求执行首件与过程巡检"}, {"name": "根据检测结果修正加工参数"}]},
+        {"name": "质量检测与数据分析", "children": [{"name": "使用游标卡尺、千分尺和百分表检测"}, {"name": "完成表面粗糙度与形位误差检查"}, {"name": "利用SPC数据与控制图判断质量趋势"}]},
+    ]},
+    {"name": "设备维护与精度保障", "college": "智能制造学院", "units": [
+        {"name": "机床日常维护保养", "children": [{"name": "执行清洁、6S与导轨点检"}, {"name": "检查润滑系统与冷却液"}, {"name": "执行点、温、振等保养记录"}]},
+        {"name": "机床几何精度检测", "children": [{"name": "完成水平、平行度与垂直度检测"}, {"name": "检测定位精度与反向间隙"}]},
+        {"name": "系统数据备份与精度补偿", "children": [{"name": "完成NC、PMC及参数数据备份与恢复"}, {"name": "实施丝杠误差补偿并复核"}]},
+    ]},
+    {"name": "故障诊断与异常处理", "college": "智能制造学院", "units": [
+        {"name": "加工质量异常诊断", "children": [{"name": "分析尺寸超差与表面质量问题"}, {"name": "处理振纹、崩刃与排屑异常"}]},
+        {"name": "设备报警与PMC诊断", "children": [{"name": "依据数控系统报警信息定位故障"}, {"name": "使用PMC梯形图与信号追踪诊断"}]},
+        {"name": "机械故障与应急处置", "children": [{"name": "处理卡刀、碰撞与突然断电"}, {"name": "执行停机隔离并完成异常上报"}]},
+    ]},
+    {"name": "安全生产与职业素养", "college": "智能制造学院", "units": [
+        {"name": "安全生产操作", "children": [{"name": "遵守数控机床安全操作规程"}, {"name": "正确使用个人防护用品和安全装置"}]},
+        {"name": "质量意识与规范作业", "children": [{"name": "按工艺文件和检验规范实施作业"}, {"name": "保持现场6S并执行质量追溯"}]},
+        {"name": "团队协作与工艺文件", "children": [{"name": "完成班组交接与异常协同处理"}, {"name": "填写加工记录并提出效率改进建议"}]},
+    ]},
 ]
 
 
@@ -118,9 +165,13 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        call_command("seed_organizations", verbosity=0)
+        call_command("seed_accounts", verbosity=0)
         college = self._ensure_college()
         self._ensure_roles_and_accounts(college)
         job = self._prepare_industry_and_job()
+        self._prepare_official_nodes(job, college)
+        self._prepare_textbook(college)
         crawl_task = self._prepare_listings(job)
         ability_nodes = self._prepare_capability_tree(job)
         self._prepare_candidate_tree(job, crawl_task)
@@ -133,9 +184,13 @@ class Command(BaseCommand):
         ))
 
     def _ensure_college(self):
-        return Organization.objects.filter(
+        colleges = Organization.objects.filter(
             name="智能制造学院", org_type="学院", is_enabled=True
-        ).order_by("id").first() or Organization.objects.create(
+        )
+        # 旧演示数据库可能保留一个没有上级学校的同名学院。优先使用
+        # seed_organizations 创建的正式学院，避免课程与账号看似同院、实际 ID 不同。
+        college = colleges.filter(parent__isnull=False).order_by("id").first()
+        return college or colleges.order_by("id").first() or Organization.objects.create(
             name="智能制造学院",
             org_type="学院",
             description="比赛评审演示使用的学院组织。",
@@ -159,7 +214,7 @@ class Command(BaseCommand):
         User = get_user_model()
         for username, real_name, role, bio in [
             ("major_group_lead", "专业群负责人", group_role, "负责智能制造产业链与岗位需求分析"),
-            ("major_lead", "专业负责人", major_role, "负责工业机器人系统运维员岗位能力审核"),
+            ("major_lead", "专业负责人", major_role, "负责数控操作工岗位能力审核与学院下发"),
         ]:
             user, created = User.objects.get_or_create(username=username)
             if created:
@@ -171,6 +226,12 @@ class Command(BaseCommand):
             profile.organization = college
             profile.bio = bio
             profile.save()
+
+        # 一键启动必须兼容已存在的旧数据库：统一所有评审账号的学院归属，
+        # 保证课程负责人的可见范围与课程树所属学院完全一致。
+        UserProfile.objects.filter(user__username__in=[
+            "college_manager", "course_owner", "course_owner_b", "teacher", "student",
+        ]).update(organization=college)
 
     def _prepare_industry_and_job(self):
         # 归档旧的展示数据；历史记录仍保留在数据库中，不影响历史追溯。
@@ -205,6 +266,83 @@ class Command(BaseCommand):
         job.save(update_fields=["aliases", "search_keywords", "is_confirmed", "is_enabled"])
         return job
 
+    def _prepare_official_nodes(self, job, college):
+        """构建可独立复现的 8 项能力、51 个知识点/技能点正式树。"""
+        CapabilityNode.objects.filter(job=job).delete()
+        for ability_order, ability_data in enumerate(CNC_DEMO_TREE):
+            ability = CapabilityNode.objects.create(
+                job=job,
+                node_type="ability",
+                name=ability_data["name"],
+                organization=college,
+                origin="ai",
+                sort_order=ability_order,
+            )
+            for unit_order, unit_data in enumerate(ability_data["units"]):
+                unit = CapabilityNode.objects.create(
+                    job=job,
+                    parent=ability,
+                    node_type="unit",
+                    name=unit_data["name"],
+                    organization=college,
+                    origin="ai",
+                    sort_order=unit_order,
+                )
+                for point_order, point_data in enumerate(unit_data["children"]):
+                    CapabilityNode.objects.create(
+                        job=job,
+                        parent=unit,
+                        node_type="point",
+                        name=point_data["name"],
+                        organization=college,
+                        origin="ai",
+                        sort_order=point_order,
+                    )
+
+    def _prepare_textbook(self, college):
+        """准备课程转化所需的最小教材知识库。"""
+        owner = get_user_model().objects.get(username="course_owner")
+        textbook, _ = Textbook.objects.update_or_create(
+            organization=college,
+            name="数控加工工艺与编程",
+            edition="评审演示版",
+            defaults={
+                "publisher": "教育部职业教育专业教学标准映射",
+                "raw_text": (
+                    "本演示知识结构依据教育部2025年《数控技术应用专业教学标准（中等职业教育）》"
+                    "第1—4页，以及《机械制造及自动化专业教学标准（高等职业教育专科）》"
+                    "第4—6页进行结构化映射；用于展示正式岗位能力节点与课程章节、知识点的匹配，"
+                    "不代替学校实际选用教材。"
+                ),
+                "created_by": owner,
+            },
+        )
+        textbook.nodes.all().delete()
+        chapters = [
+            ("第一章 数控加工的切削基础", [
+                "设备、刀具、夹具和量具选择", "夹具选择原则", "工件夹紧要求与夹紧力",
+            ]),
+            ("第二章 数控加工的工艺基础", [
+                "零件图与工艺分析", "加工方法选择", "零件毛坯的选择", "工艺路线的拟定",
+            ]),
+        ]
+        for chapter_order, (chapter_name, knowledge_names) in enumerate(chapters):
+            chapter = TextbookNode.objects.create(
+                textbook=textbook,
+                node_type="chapter",
+                name=chapter_name,
+                sort_order=chapter_order,
+            )
+            for knowledge_order, knowledge_name in enumerate(knowledge_names):
+                TextbookNode.objects.create(
+                    textbook=textbook,
+                    parent=chapter,
+                    node_type="knowledge",
+                    name=knowledge_name,
+                    content=f"{knowledge_name}的教学要点与操作规范。",
+                    sort_order=knowledge_order,
+                )
+
     def _prepare_listings(self, job):
         JobListing.objects.filter(job=job).delete()
         CrawlTask.objects.filter(job=job).delete()
@@ -219,6 +357,8 @@ class Command(BaseCommand):
         )
         source.name = "中国公共招聘网"
         source.base_url = "http://job.mohrss.gov.cn"
+        # 启动后约 2 分钟完成首次调度，之后按每日周期运行，避免反复生成重复任务。
+        source.interval_minutes = 1440
         CrawlSource.objects.exclude(pk=source.pk).update(is_enabled=False)
         source.is_enabled = True
         data_path = Path(settings.BASE_DIR) / "data" / "智能制造_数控操作工_爬取结果.json"
@@ -230,8 +370,8 @@ class Command(BaseCommand):
             raise RuntimeError("评审演示招聘数据不足 10 条，无法生成岗位能力图谱")
         now = timezone.now()
         source.last_run_at = now
-        source.next_run_at = now + timedelta(minutes=source.interval_minutes)
-        source.save(update_fields=["name", "base_url", "is_enabled", "last_run_at", "next_run_at", "updated_at"])
+        source.next_run_at = now + timedelta(minutes=2)
+        source.save(update_fields=["name", "base_url", "interval_minutes", "is_enabled", "last_run_at", "next_run_at", "updated_at"])
         task = CrawlTask.objects.create(
             job=job,
             source=source,
@@ -397,6 +537,12 @@ class Command(BaseCommand):
                     source_node=point,
                     textbook_node=textbook_nodes[knowledge_mapping[point.name]],
                     task_description=f"掌握并能够完成：{point.name}。",
+                    resource_links=[
+                        f"《数控加工工艺与编程》评审演示教材：{knowledge_mapping[point.name]}",
+                        f"{unit.name}课堂操作指导单",
+                        "教育部《数控技术应用专业教学标准（中等职业教育）》：PDF第1—4页",
+                        "教育部《机械制造及自动化专业教学标准（高等职业教育专科）》：PDF第4—6页",
+                    ],
                     is_edited=True,
                     sort_order=point_order,
                 ))
@@ -426,27 +572,50 @@ class Command(BaseCommand):
     def _prepare_student_experience(self, course_tree):
         student = Student.objects.select_related("user").filter(user__username="student").first()
         if student is None:
-            raise RuntimeError("未找到 student 演示账号对应的学生档案，请先执行 python manage.py seed")
+            student_user = get_user_model().objects.get(username="student")
+            student = Student.objects.filter(name="张晨希").first() or Student.objects.first()
+            if student is None:
+                raise RuntimeError("未找到可用于评审演示的学生档案")
+            student.user = student_user
         student.major = "数控技术"
         student.grade = "2024级"
-        student.save(update_fields=["major", "grade", "updated_at"])
+        student.save(update_fields=["user", "major", "grade", "updated_at"])
         # 本命令仅用于评审演示账号，因此清空该账号的旧样例，避免学生端展示多条不相关主线。
         LearningPlan.objects.filter(student=student).delete()
-        LearningPlan.objects.update_or_create(
+        plan, _ = LearningPlan.objects.update_or_create(
             student=student,
-            course_tree=course_tree,
+            name="数控加工工艺与编程学习计划",
             plan_type="semester",
             defaults={
-                "name": "数控加工工艺与编程学习计划",
                 "category": "岗位能力学习",
                 "status": "doing",
-                "progress": 40,
-                "learned_hours": 18,
+                "progress": 29,
+                "learned_hours": 19,
                 "total_hours": 64,
                 "deadline": timezone.localdate().replace(month=12, day=31),
                 "teacher": "刘老师",
             },
         )
+        plan_course, _ = PlanCourse.objects.update_or_create(
+            plan=plan,
+            course_tree=course_tree,
+            defaults={"sort_order": 0},
+        )
+        # 学期计划默认包含该课程全部 7 个任务卡，并预置 2 个已完成节点。
+        # 评委既能看到已有学习成果，也能继续标记剩余任务完成。
+        point_nodes = list(course_tree.nodes.filter(
+            node_type="knowledge",
+        ).order_by("parent__sort_order", "sort_order", "id"))
+        PlanPoint.objects.filter(plan_course=plan_course).delete()
+        PlanPoint.objects.bulk_create([
+            PlanPoint(plan_course=plan_course, node=node, sort_order=index)
+            for index, node in enumerate(point_nodes)
+        ])
+        LearningProgress.objects.filter(student=student, node__tree=course_tree).delete()
+        LearningProgress.objects.bulk_create([
+            LearningProgress(student=student, node=node)
+            for node in point_nodes[:2]
+        ])
         LearningRecord.objects.filter(student=student).delete()
         LearningRecord.objects.bulk_create([
             LearningRecord(student=student, title="已接收岗位能力学习计划", description="课程负责人已发布数控加工工艺与编程学习任务。", tag="评审演示"),
