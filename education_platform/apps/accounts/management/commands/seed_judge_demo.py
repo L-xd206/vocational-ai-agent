@@ -307,13 +307,8 @@ class Command(BaseCommand):
             name="数控加工工艺与编程",
             edition="评审演示版",
             defaults={
-                "publisher": "教育部职业教育专业教学标准映射",
-                "raw_text": (
-                    "本演示知识结构依据教育部2025年《数控技术应用专业教学标准（中等职业教育）》"
-                    "第1—4页，以及《机械制造及自动化专业教学标准（高等职业教育专科）》"
-                    "第4—6页进行结构化映射；用于展示正式岗位能力节点与课程章节、知识点的匹配，"
-                    "不代替学校实际选用教材。"
-                ),
+                "publisher": "职业教育数字资源中心",
+                "raw_text": "用于评审演示的脱敏课程知识结构。",
                 "created_by": owner,
             },
         )
@@ -540,8 +535,6 @@ class Command(BaseCommand):
                     resource_links=[
                         f"《数控加工工艺与编程》评审演示教材：{knowledge_mapping[point.name]}",
                         f"{unit.name}课堂操作指导单",
-                        "教育部《数控技术应用专业教学标准（中等职业教育）》：PDF第1—4页",
-                        "教育部《机械制造及自动化专业教学标准（高等职业教育专科）》：PDF第4—6页",
                     ],
                     is_edited=True,
                     sort_order=point_order,
