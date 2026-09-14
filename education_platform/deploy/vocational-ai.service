@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=nginx
+Group=nginx
 WorkingDirectory=/srv/vocational-ai-agent/education_platform
 ExecStart=/srv/vocational-ai-agent/education_platform/.venv/bin/uwsgi --ini /srv/vocational-ai-agent/education_platform/deploy/uwsgi.ini
 Restart=always

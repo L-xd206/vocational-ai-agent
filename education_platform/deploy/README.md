@@ -8,18 +8,22 @@
 - `8001`：uWSGI 回环地址端口，只允许服务器本机访问，禁止映射或开放。
 - 公司若提供外部 HTTPS，需让网关传递 `Host` 和 `X-Forwarded-Proto: https`。
 
-## 首次安装
+## 首次安装（CentOS 7 x86_64）
 
 ```bash
-sudo apt update
-sudo apt install -y git nginx python3-venv python3-pip python3-dev build-essential
+yum install -y git nginx gcc gcc-c++ make
+
+cd /tmp
+curl -fL -o miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-py311_24.5.0-0-Linux-x86_64.sh
+echo "38b203bb1f2be78b735ebc00162f29e8e73fcd9a619ed5980490a72193ee1f58  miniconda.sh" | sha256sum -c -
+bash miniconda.sh -b -p /opt/miniconda3
+/opt/miniconda3/bin/python --version
 
 cd /srv
-sudo git clone https://github.com/L-xd206/vocational-ai-agent.git
-sudo chown -R "$USER":"$USER" /srv/vocational-ai-agent
+git clone https://github.com/L-xd206/vocational-ai-agent.git
 cd /srv/vocational-ai-agent/education_platform
 
-python3 -m venv .venv
+/opt/miniconda3/bin/python -m venv .venv
 ./.venv/bin/pip install --upgrade pip wheel
 ./.venv/bin/pip install -r requirements-production.txt
 mkdir -p data output collectedstatic
@@ -54,25 +58,25 @@ DJANGO_CSRF_COOKIE_SECURE=false
 ## 注册服务
 
 ```bash
-sudo cp deploy/vocational-ai.service /etc/systemd/system/
-sudo cp deploy/nginx-vocational-ai.conf /etc/nginx/conf.d/vocational-ai.conf
+cp deploy/vocational-ai.service /etc/systemd/system/
+cp deploy/nginx-vocational-ai.conf /etc/nginx/conf.d/vocational-ai.conf
 
-sudo chown -R www-data:www-data data output
-sudo chown www-data:www-data .env
-sudo chmod 600 .env
+chown -R nginx:nginx data output collectedstatic
+chown nginx:nginx .env
+chmod 600 .env
 
-sudo systemctl daemon-reload
-sudo systemctl enable --now vocational-ai
-sudo nginx -t
-sudo systemctl reload nginx
+systemctl daemon-reload
+systemctl enable --now vocational-ai
+nginx -t
+systemctl enable --now nginx
 ```
 
 ## 公司做端口转换前的服务器内测
 
 ```bash
 curl -I http://127.0.0.1:8000/login.html
-sudo systemctl status vocational-ai --no-pager
-sudo journalctl -u vocational-ai -n 100 --no-pager
+systemctl status vocational-ai --no-pager
+journalctl -u vocational-ai -n 100 --no-pager
 ```
 
 公司网络侧应把评委访问地址转发到 `服务器内网IP:8000`。安全组或防火墙只允许公司网关访问 `8000`；不要开放 `8001`。
@@ -86,6 +90,6 @@ cd education_platform
 ./.venv/bin/pip install -r requirements-production.txt
 ./.venv/bin/python manage.py migrate
 ./.venv/bin/python manage.py collectstatic --noinput
-sudo systemctl restart vocational-ai
-sudo nginx -t && sudo systemctl reload nginx
+systemctl restart vocational-ai
+nginx -t && systemctl reload nginx
 ```
