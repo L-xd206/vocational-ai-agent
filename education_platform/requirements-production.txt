@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Linux 生产服务器的 WSGI 服务；Windows 本机开发不需要安装。
+gunicorn==23.0.0
