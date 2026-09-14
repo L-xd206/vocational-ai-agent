@@ -1,5 +1,5 @@
 [Unit]
-Description=Vocational AI Django via uWSGI
+Description=Vocational AI Django via Gunicorn
 After=network.target
 
 [Service]
@@ -7,10 +7,9 @@ Type=simple
 User=nginx
 Group=nginx
 WorkingDirectory=/srv/vocational-ai-agent/education_platform
-ExecStart=/srv/vocational-ai-agent/education_platform/.venv/bin/uwsgi --ini /srv/vocational-ai-agent/education_platform/deploy/uwsgi.ini
+ExecStart=/srv/vocational-ai-agent/education_platform/.venv/bin/gunicorn --bind 127.0.0.1:8001 --workers 1 --threads 4 --timeout 360 --graceful-timeout 30 --access-logfile - --error-logfile - config.wsgi:application
 Restart=always
 RestartSec=5
-KillSignal=SIGQUIT
 
 [Install]
 WantedBy=multi-user.target

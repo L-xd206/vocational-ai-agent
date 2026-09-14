@@ -1,4 +1,4 @@
 -r requirements.txt
 
-# 公司 Linux 服务器的 WSGI 服务；Windows 本机开发不需要安装。
-uWSGI>=2.0.24,<3
+# 公司 Linux 服务器的 WSGI 服务；纯 Python 安装，兼容 CentOS 7 的旧工具链。
+gunicorn>=23,<24
